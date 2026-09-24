@@ -250,6 +250,21 @@ const D: Record<string, Record<Lang, string>> = {
   status_pending: { en: 'pending', hi: 'लंबित', ta: 'நிலுவையில்' },
   status_approved: { en: 'approved', hi: 'स्वीकृत', ta: 'ஏற்கப்பட்டது' },
   status_denied: { en: 'denied', hi: 'अस्वीकृत', ta: 'மறுக்கப்பட்டது' },
+
+  // Onboarding walkthrough — read aloud on first login
+  onboard_title: { en: 'Welcome to TrustVault', hi: 'TrustVault में आपका स्वागत है', ta: 'TrustVault-க்கு வரவேற்கிறோம்' },
+  onboard_sub: {
+    en: 'Worth over a minute — it reads itself.',
+    hi: 'एक मिनट ज़रूर दें — यह खुद बोलता है।',
+    ta: 'ஒரு நிமிடம் தாருங்கள் — அது தானே பேசுகிறது.',
+  },
+  onboard_script: {
+    en: 'Welcome to TrustVault. Your identity is safe here. You can verify a document with the QR scanner, watch your trust score, and approve access with three big buttons: Allow, Ask again, or Block. If you are ever under threat, one tap on Duress freezes your identity silently. Every request you approve is time-bound and recorded on the blockchain. Let us get started.',
+    hi: 'TrustVault में आपका स्वागत है। आपकी पहचान यहाँ सुरक्षित है। आप QR स्कैनर से दस्तावेज़ सत्यापित कर सकते हैं, अपना विश्वास स्कोर देख सकते हैं, और तीन बड़े बटन — अनुमति दें, फिर पूछें, या रोकें — से अनुमति दे सकते हैं। अगर कभी आप पर दबाव हो, तो एक टैप में ड्यूरेस आपकी पहचान को चुपचाप फ्रीज़ कर देता है। आप जो भी अनुमति देते हैं वह समय-सीमित होती है और ब्लॉकचेन पर दर्ज होती है। चलिए, शुरू करते हैं।',
+    ta: 'TrustVault-க்கு வரவேற்கிறோம். உங்கள் அடையாளம் இங்கே பாதுகாப்பானது. QR ஸ்கேனர் மூலம் ஆவணங்களைச் சரிபார்க்கலாம், உங்கள் நம்பிக்கை மதிப்பெண்ணைப் பார்க்கலாம், அனுமதி, மறுபடியும் கேள், தடு — இந்த மூன்று பெரிய பொத்தான்களால் அனுமதி வழங்கலாம். ஒருபோதும் ஆபத்தில் இருந்தால், ஒரே தொடுதலில் டூரஸ் உங்கள் அடையாளத்தை அமைதியாக உறைய வைக்கும். நீங்கள் வழங்கும் அனைத்து அனுமதிகளும் கால வரம்புடையவை, பிளாக்செயினில் பதிவாகும். தொடங்குவோம்.',
+  },
+  onboard_start: { en: 'Got it — let me in', hi: 'समझ गया — अंदर ले चलें', ta: 'சரி — என்னை உள்ளே அனுப்பு' },
+  onboard_replay: { en: 'Play tour again', hi: 'टूर फिर से सुनें', ta: 'விளக்கத்தை மீண்டும் கேளுங்கள்' },
 }
 
 export function tr(lang: Lang, key: string): string {

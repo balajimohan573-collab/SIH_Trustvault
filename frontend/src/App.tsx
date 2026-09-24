@@ -23,6 +23,7 @@ import {
 } from './components/icons'
 import { cn, Tip } from './components/ui'
 import LanguageSwitcher from './components/LanguageSwitcher'
+import Walkthrough from './components/Walkthrough'
 import { useLang, tr } from './i18n'
 
 type Tab = 'dashboard' | 'verify' | 'trust' | 'timeline' | 'credentials' | 'assets' | 'access' | 'audit'
@@ -217,6 +218,8 @@ function App() {
           </div>
         </main>
       </div>
+
+      <Walkthrough />
     </div>
   )
 }
