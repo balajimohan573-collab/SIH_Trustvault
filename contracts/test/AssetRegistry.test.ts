@@ -2,44 +2,61 @@ import { expect } from "chai";
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import { ethers } from "hardhat";
 
-const ASSET = ethers.keccak256(ethers.toUtf8Bytes("asset-1"));
-const OWNER = ethers.keccak256(ethers.toUtf8Bytes("did:trustvault:holder"));
+const OWNER_DID = "did:trustvault:holder";
 const FILEHASH = ethers.keccak256(ethers.toUtf8Bytes("plaintext-bytes"));
+const FILEHASH2 = ethers.keccak256(ethers.toUtf8Bytes("plaintext-bytes-2"));
 
 async function deployAssetRegistry() {
-  const [owner, stranger] = await ethers.getSigners();
+  const [deployer, holder, stranger] = await ethers.getSigners();
   const Factory = await ethers.getContractFactory("AssetRegistry");
   const registry = await Factory.deploy();
   await registry.waitForDeployment();
-  return { registry, owner, stranger };
+  return { registry, deployer, holder, stranger };
 }
 
-describe("AssetRegistry", () => {
-  it("registers an asset with owner DID hash and file hash", async () => {
-    const { registry, owner } = await loadFixture(deployAssetRegistry);
-    await registry.registerAsset(ASSET, OWNER, FILEHASH);
-    const [ownerHash, fileHash, cid] = await registry.getAsset(ASSET);
-    expect(ownerHash).to.equal(OWNER);
-    expect(fileHash).to.equal(FILEHASH);
-    expect(cid).to.equal("");
-    expect(await registry.assetExists(ASSET)).to.equal(true);
-  });
-
-  it("prevents duplicate registration", async () => {
-    const { registry } = await loadFixture(deployAssetRegistry);
-    await registry.registerAsset(ASSET, OWNER, FILEHASH);
-    await expect(registry.registerAsset(ASSET, OWNER, FILEHASH)).to.be.revertedWith(
-      "AssetRegistry: asset already registered"
+describe("AssetRegistry (ERC-721)", () => {
+  it("mints an NFT and records hash + DID reference", async () => {
+    const { registry, holder } = await loadFixture(deployAssetRegistry);
+    const tokenId = await registry.mintAsset.staticCall(
+      holder.address,
+      FILEHASH,
+      OWNER_DID,
+      ""
     );
+    await registry.mintAsset(holder.address, FILEHASH, OWNER_DID, "");
+    expect(await registry.ownerOf(tokenId)).to.equal(holder.address);
+    expect(await registry.fileHashOf(tokenId)).to.equal(FILEHASH);
+    expect(await registry.ownerDidRefOf(tokenId)).to.equal(OWNER_DID);
   });
 
-  it("rejects empty owner hash and empty file hash", async () => {
-    const { registry } = await loadFixture(deployAssetRegistry);
+  it("assigns sequential token ids", async () => {
+    const { registry, holder } = await loadFixture(deployAssetRegistry);
+    await registry.mintAsset(holder.address, FILEHASH, OWNER_DID, "");
+    await registry.mintAsset(holder.address, FILEHASH2, OWNER_DID, "");
+    expect(await registry.nextTokenId()).to.equal(2);
+    expect(await registry.ownerOf(1)).to.equal(holder.address);
+  });
+
+  it("supports ERC-721 ownership transfers", async () => {
+    const { registry, holder, stranger } = await loadFixture(deployAssetRegistry);
+    await registry.mintAsset(holder.address, FILEHASH, OWNER_DID, "");
+    await registry.connect(holder).transferAsset(holder.address, stranger.address, 0);
+    expect(await registry.ownerOf(0)).to.equal(stranger.address);
+  });
+
+  it("restricts minting to the operator (owner)", async () => {
+    const { registry, stranger } = await loadFixture(deployAssetRegistry);
     await expect(
-      registry.registerAsset(ASSET, ethers.ZeroHash, FILEHASH)
-    ).to.be.revertedWith("AssetRegistry: empty owner hash");
+      registry.connect(stranger).mintAsset(stranger.address, FILEHASH, OWNER_DID, "")
+    ).to.be.revertedWithCustomError(registry, "OwnableUnauthorizedAccount");
+  });
+
+  it("rejects empty file hash and exposes a trustvault token URI", async () => {
+    const { registry, holder } = await loadFixture(deployAssetRegistry);
     await expect(
-      registry.registerAsset(ASSET, OWNER, ethers.ZeroHash)
+      registry.mintAsset(holder.address, ethers.ZeroHash, OWNER_DID, "")
     ).to.be.revertedWith("AssetRegistry: empty file hash");
+    await registry.mintAsset(holder.address, FILEHASH, OWNER_DID, "");
+    expect(await registry.tokenURI(0)).to.equal("trustvault://asset/0");
   });
 });

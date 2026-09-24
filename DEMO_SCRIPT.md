@@ -1,10 +1,11 @@
-# TrustVault — 3–5 Minute Demo Script
+# TrustVault V2 — 3–5 Minute Demo Script
 
 Tagline: **Verify once. Control access everywhere.**
 
-This is the exact demo flow: login → encrypted upload → verifier request →
-ALLOW → simulated attack → trust collapse → STEP_UP/BLOCK → revocation →
-anchored audit trail.
+The Ravi (holder) journey: login → education VC → encrypted upload + NFT →
+context-aware policy → ALLOW → RESTRICTED without context → QR proof →
+NFT transfer → simulated attack → STEP_UP → revocation → duress freeze →
+anchored audit + offline sync.
 
 ## Prerequisite
 
@@ -17,71 +18,95 @@ $env:RATE_LIMIT_MAX = "500"
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000
 ```
 
-Optional but recommended for the full picture: `docker compose up -d`
-(free local Postgres) and switch `DATABASE_URL` in `backend/.env`.
+Enable the optional attack extras (only if the judges want them live):
+
+```powershell
+$env:ML_ANOMALY_ENABLED = "true"      # Isolation-Forest anomaly layer
+$env:DURESS_ENABLED = "true"          # duress-freeze module
+# restart uvicorn after setting either
+```
 
 ## The script (read while the screen is on)
 
 ### 1. Login — passkeys, issued once (0:00–0:30)
 
 Four seeded demo identities log in: **admin@**, **issuer@**, **holder@**,
-**verifier@trustvault.example**. The API never sees a password — the browser
-completes a WebAuthn ceremony (dev fallback for the demo) and exchanges a
-short-lived JWT.
+**verifier@trustvault.example**. WebAuthn ceremony with dev fallback; the API
+never sees a password.
 
-> Say it: *"The institution verified the holder once. Every later access is
-> governed by policy + live trust, not by a stored credential."*
+> Say it: *"The institution verified Ravi once. Every later access is governed
+> by policy + live trust, not by a stored credential."*
 
-### 2. Issue a credential (hash-only) (0:30–1:00)
+### 2. Issue an education VC (hash-only) (0:30–1:00)
 
-The issuer emits an education credential for the holder. On-chain you see
-**only the SHA-256 hash and the signed status record** — never the document.
+The issuer emits an **education_certificate** credential for Ravi (IIT, Mumbai).
+On-chain and in the DB you see **only the SHA-256 hash and status** — never the
+document. Ravi's credential now feeds the trust engine.
 
-### 3. Encrypted upload — prove possession (1:00–1:30)
+### 3. Encrypted upload + ERC-721 custody (1:00–1:30)
 
-The holder uploads a document. The backend:
+Ravi uploads an encrypted document (`resume-proof.pdf`). The backend:
 
-1. AES-256-GCM encrypts it → ciphertext written to local `storage/`,
+1. AES-256-GCM encrypts it → ciphertext to local `storage/`,
 2. records the SHA-256 integrity hash + `AssetRegistry` anchor,
-3. shows the proof metadata in the dashboard (`file_hash`, anchor status).
+3. **mints an ERC-721 NFT** (`nft_token_id`) proving custody — with
+   `CHAIN_ENABLED=true` the token id shows in the Assets panel, visible after
+   upload arrows. Transfer is one click.
 
-### 4. Purpose-scoped, time-bound access (1:30–2:00)
+### 4. Context-aware policy (1:30–2:00)
 
-The verifier requests access for purpose `employment`. The holder approves a
-**30-minute** grant constrained to that purpose. The verifier downloads and the
-response round-trips byte-for-byte to the original plaintext.
+Ravi scopes a policy: **verifier role, purpose `employment`, min trust 60,
+location `HQ-Floor-3` (non-strict), business hours 09:00–18:00**.
 
-Trust panel: `ALLOW`, `trust=96`, reasons `[OK_CREDENTIAL, KNOWN_DEVICE, ...]`.
+Then:
+- Request + approve a **30-minute** grant → download with location header
+  `HQ-Floor-3` → **ALLOW**, content round-trips byte-for-byte.
+- Download **without** the location header →
+  **RESTRICTED** (`LOCATION_MISSING`) — 403, read-only, content never exposed,
+  human explanation shown.
 
-### 5. Attack — watch trust collapse (2:00–3:30)
+> Say it: *"Missing context never leaks data — it degrades to RESTRICTED.
+> Non-strict means a *simulated* context breach just throttles; it never
+> unlocks anything."*
 
-Run `scripts/attack_sim.py` (or trigger from the timeline UI). A forged session
-replay + request-storm + auth-failure burst impersonates the verifier:
+### 5. QR proof, on demand (2:00–2:20)
 
-- Trust drops **96 → 71**, decision flips **ALLOW → STEP_UP**
-  (`REQUEST_VELOCITY_HIGH`, identity penalty).
-- A second burst blocks outright (`REQUEST_VELOCITY_EXCESSIVE`).
-- The security-event timeline shows the exact moment, reason codes, and score.
+Ravi generates a short-lived (5-min) QR token scoped `contract-signing`. The
+verifier opens the **Verify** tab (or `/verify?token=...`), scans, and the
+credential status + purpose render live. Verify is deliberately public —
+proving is not a secret.
+
+### 6. NFT custody transfer (2:20–2:45)
+
+Ravi transfers the asset's NFT custody to the verifier identity (one click in
+the Assets panel). The ownership rail now shows the full custody history; the
+transfer is a first-class, anchored audit event.
+
+### 7. Attack — watch trust collapse (2:45–4:00)
+
+Run `scripts/attack_sim.py`. A forged JWT + IDOR attempt bounce (DENY), then a
+velocity + auth-failure storm impersonating the verifier:
+
+- Trust drops → clean download flips **ALLOW → STEP_UP**
+  (`REQUEST_VELOCITY_HIGH`, identity penalty),
+- credential revoked → **DENY** `CREDENTIAL_REVOKED` instantly,
+- with `DURESS_ENABLED=true`: Ravi triggers duress (hide-in-plain-sight) and
+  even *his own* sensitive access freezes `DENY` `DURESS_ACTIVE` until the PIN
+  deactivates it.
 
 > Say it: *"The blockchain proves what happened; the Trust Engine decides what
 > happens next. The attack is visible, explainable, and reversible."*
 
-### 6. Instant revocation (3:30–4:00)
+### 8. Audit trail + offline sync + recovery (4:00–4:30)
 
-The issuer revokes the verifier's credential. The holder's next download is
-hard-blocked with `CREDENTIAL_REVOKED` — revocation propagates immediately,
-on-chain and off-chain.
+The Dashboard **technical** view (admin/auditor) shows KPIs, pending grants,
+and every high-value event with its **anchor + tx hash** on Sepolia. With
+`RPC_URL` + `PRIVATE_KEY` configured, pending anchors promote at startup.
+The Offline rail shows queued events reconciling (`/offline/sync`), and the
+Recovery rail shows emitted holder-recovery requests + decisions.
 
-### 7. Audit trail with a real transaction (4:00–4:30)
-
-The audit panel lists every high-value event (`asset_created`,
-`access_allowed`, `access_blocked`, admin override) with its **anchor status
-and transaction hash** on Sepolia. With `RPC_URL` + `PRIVATE_KEY` configured
-(pending anchors promote to real txs at startup), paste the tx hash into a
-block explorer.
-
-> Say it: *"Every decision is explainable, every high-value event is anchored.
-> No raw data ever touches the chain."*
+> Say it: *"Every decision explainable, every high-value event anchored,
+> offline decisions eventually reconciled. No raw data ever touches the chain."*
 
 ## Reset between runs
 
@@ -93,13 +118,16 @@ block explorer.
 
 | Beat | Where |
 |------|-------|
-| ALLOW → STEP_UP → BLOCK under attack | `backend/scripts/attack_sim.py` |
-| Trust score + reason codes | `/trust/{user_id}` or the Trust panel |
-| Real testnet tx hash | `GET /audit/{asset_id}` anchor rows |
-| Encrypted round-trip | `scripts/demo.py` stage 5 |
+| ALLOW → RESTRICTED (context) → STEP_UP → DENY | `scripts/demo.py` + `scripts/attack_sim.py` |
+| ERC-721 NFT custody + transfer | Assets panel / `GET /assets/{id}/ownership` |
+| QR proof flow | Verify tab / `POST /credentials/qr/{generate,verify}` |
+| Duress freeze (optional) | `DURESS_ENABLED=true` then attack_sim stage H |
+| Real testnet tx hash | Dashboard technical view or `GET /audit/{asset_id}` |
+| Encrypted round-trip + offline sync | `scripts/demo.py` stages 5 & 10 |
 
 ## Going live on Sepolia (if network is up)
 
 `cd contracts`; set `RPC_URL`/`PRIVATE_KEY` in `contracts/.env`;
-`npx hardhat run scripts/deploy.ts --network sepolia`; paste the four printed
-addresses into `backend/.env`. Pending anchors then confirm on-chain.
+`npx hardhat run scripts/deploy.ts --network sepolia`; paste the printed
+addresses into `backend/.env`, set `CHAIN_ENABLED=true`. Uploads mint live NFTs
+and pending anchors confirm on-chain.

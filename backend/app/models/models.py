@@ -84,10 +84,17 @@ class Asset(Base):
     # Content identifier for a future IPFS/S3 backend. Nullable for now.
     cid: Mapped[str | None] = mapped_column(String(255), nullable=True)
     content_type: Mapped[str] = mapped_column(String(128), default="application/octet-stream")
+    # V2: NFT-backed ownership (ERC-721). Assigned on-chain (best-effort) or locally.
+    nft_token_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    chain_tx_hash: Mapped[str | None] = mapped_column(String(66), nullable=True)
+    transferred_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    asset_class: Mapped[str] = mapped_column(String(64), default="document")  # e.g. document|contract|record
+    description: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     policies: Mapped[list["AccessPolicy"]] = relationship(back_populates="asset")
     grants: Mapped[list["AccessGrant"]] = relationship(back_populates="asset")
+    transfers: Mapped[list["AssetTransfer"]] = relationship(back_populates="asset")
 
 
 class AccessPolicy(Base):
@@ -99,6 +106,13 @@ class AccessPolicy(Base):
     purpose: Mapped[str] = mapped_column(String(255), nullable=False)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     min_trust: Mapped[int] = mapped_column(Integer, default=0)
+    # V2: optional, policy-based location/time constraints (users never enter GPS).
+    location_scope: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    location_strict: Mapped[bool] = mapped_column(Boolean, default=False)
+    time_start: Mapped[str | None] = mapped_column(String(16), nullable=True)  # HH:MM
+    time_end: Mapped[str | None] = mapped_column(String(16), nullable=True)  # HH:MM
+    time_zone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    context_required: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     asset: Mapped["Asset"] = relationship(back_populates="policies")
 
@@ -111,6 +125,8 @@ class AccessRequest(Base):
     requester_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True, nullable=False)
     purpose: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="pending")  # pending | approved | denied
+    # V2: policy-declared context (location scope etc.) captured for audit.
+    context_provided: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -153,7 +169,7 @@ class SecurityEvent(Base):
     # Free-form JSONB risk signals (IP, device, velocity, fingerprints...).
     risk_signals: Mapped[dict] = mapped_column(JSON, default=dict)
     trust_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    decision: Mapped[str | None] = mapped_column(String(32), nullable=True)  # ALLOW | STEP_UP | BLOCK
+    decision: Mapped[str | None] = mapped_column(String(32), nullable=True)  # ALLOW | STEP_UP | RESTRICTED | DENY
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -166,3 +182,76 @@ class AuditAnchor(Base):
     tx_hash: Mapped[str] = mapped_column(String(66), default="pending", nullable=False)
     chain: Mapped[str] = mapped_column(String(32), default="sepolia")
     anchored_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+# ---------------------------------------------------------------- V2 models
+
+
+class AssetTransfer(Base):
+    """Ownership-transfer ledger for NFT-backed assets."""
+
+    __tablename__ = "asset_transfers"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    asset_id: Mapped[str] = mapped_column(String(36), ForeignKey("assets.id"), index=True, nullable=False)
+    from_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    to_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    chain_tx_hash: Mapped[str | None] = mapped_column(String(66), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    asset: Mapped["Asset"] = relationship(back_populates="transfers")
+
+
+class OfflineEvent(Base):
+    """Queue for offline decisions; reconciled with the audit trail on sync.
+
+    `content_hash` is a SHA-256 over the canonical payload so re-uploads (e.g.
+    duplicate network retries) are idempotent.
+    """
+
+    __tablename__ = "offline_events"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id"), index=True, nullable=True
+    )
+    asset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    decision: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    reasons: Mapped[list] = mapped_column(JSON, default=list)
+    trust_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    content_hash: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    client_ts: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    sync_status: Mapped[str] = mapped_column(String(16), default="pending")  # pending | failed | synced
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class DeviceRecovery(Base):
+    """Device-loss recovery requests (register new device / revoke stale one)."""
+
+    __tablename__ = "device_recoveries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="pending")  # pending | approved | denied
+    reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    requested_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class DuressSession(Base):
+    """Covert duress state. When active, sensitive access is restricted/frozen.
+
+    Enforced only when `duress_enabled` is on; carries a short TTL.
+    """
+
+    __tablename__ = "duress_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True, nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=False)
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    risk_signals: Mapped[dict] = mapped_column(JSON, default=dict)

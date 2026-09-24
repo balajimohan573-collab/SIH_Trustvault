@@ -9,14 +9,17 @@ Requires the backend running with seeded users:
 Scenarios (each ends with a PASS/FAIL verdict):
 
     A  Forged / tampered JWT            -> 401, no data leak
-    B  IDOR / no-permission attempt     -> BLOCK NO_POLICY_FOR_ROLE (403)
+    B  IDOR / no-permission attempt     -> DENY NO_POLICY_FOR_ROLE (403)
     C  Scoped, time-bound grant          -> verifier download ALLOW (baseline)
+    C2 Context-aware policy (location)   -> RESTRICTED when context is missing/mismatched,
+                                           ALLOW when the declared context matches
     D  Attack becomes visible           -> velocity + auth-failure storm
                                           drags trust down, clean download
                                           collapses ALLOW -> STEP_UP
     F  Admin override recovery          -> ALLOW, privileged entry + anchor
-    E  Instantly-propagating revocation -> BLOCK CREDENTIAL_REVOKED
+    E  Instantly-propagating revocation -> DENY CREDENTIAL_REVOKED
     G  Audit trail                       -> high-value events anchored
+    H  Duress freeze (optional)         -> when enabled, holder's sensitive access is DENY
 """
 import time
 import uuid
@@ -150,9 +153,9 @@ def main():
     r = sim.download("verifier", decoy_asset["id"])
     reasons = (r.json().get("detail") or {}).get("reasons", []) if r.status_code == 403 else []
     verdict(r.status_code == 403 and "NO_POLICY_FOR_ROLE" in reasons,
-            f"verifier download without policy/grant -> 403 BLOCK {reasons}")
+            f"verifier download without policy/grant -> 403 DENY {reasons}")
     r = sim.download("verifier", decoy_asset["id"], **{"X-TrustVault-Admin-Override": "1"})
-    verdict(r.status_code == 403, "non-admin override header is ignored (still BLOCK)")
+    verdict(r.status_code == 403, "non-admin override header is ignored (still DENY)")
 
     # ---------- C: legitimate scoped grant ----------
     banner("C - BASELINE: owner grants purpose-scoped, time-bound access")
@@ -166,6 +169,55 @@ def main():
     if t0:
         print(f"  trust baseline: score={t0['trust_score']} decision={t0['decision']} reasons={t0['reasons']}")
 
+    # ---------- C2: context-aware policy (location) ----------
+    banner("C2 - CONTEXT: declared location degrades to RESTRICTED, never DENY, when missing")
+    r = sim.call(
+        "POST", f"/assets/{asset['id']}/policy", headers=sim.auth("holder"),
+        json={"requester_role": "verifier", "purpose": "audit", "min_trust": 50,
+              "location_scope": "HQ-Floor-3", "location_strict": False},
+    )
+    assert r.status_code == 200, f"audit policy create failed: {r.text[:200]}"
+    grant_flow(sim, "verifier", "holder", asset["id"], "audit")
+    r = sim.download("verifier", asset["id"])
+    if r.status_code == 403:
+        detail = r.json().get("detail") or {}
+        reasons = detail.get("reasons", [])
+        verdict(detail.get("decision") == "RESTRICTED" and "LOCATION_MISSING" in reasons,
+                f"no location context -> RESTRICTED {reasons}")
+    else:
+        verdict(False, "no location context -> expected RESTRICTED, got " + str(r.status_code))
+    r = sim.download("verifier", asset["id"], **{"X-TrustVault-Location-Scope": "HQ-Floor-2"})
+    if r.status_code == 403:
+        detail = r.json().get("detail") or {}
+        reasons = detail.get("reasons", [])
+        verdict(detail.get("decision") == "RESTRICTED" and "LOCATION_MISMATCH" in reasons,
+                f"wrong location -> RESTRICTED {reasons}")
+    else:
+        verdict(False, "wrong location -> expected RESTRICTED, got " + str(r.status_code))
+    r = sim.download("verifier", asset["id"], **{"X-TrustVault-Location-Scope": "HQ-Floor-3"})
+    verdict(r.status_code == 200 and b"TOP SECRET" in r.content,
+            f"matching location context -> ALLOW ({len(r.content)} bytes)")
+
+    # ---------- H: duress freeze (feature-flagged) ----------
+    banner("H - DURESS: covert freeze of sensitive access (default disabled)")
+    r = sim.call("POST", "/duress/activate", headers=sim.auth("verifier"))
+    if r.status_code == 400:
+        print("  duress module disabled by default - start backend with "
+              "DURESS_ENABLED=true and re-run to exercise the hide-in-plain-sight freeze")
+        verdict(True, "duress feature-flagged off, endpoint responds 400")
+    else:
+        assert r.status_code == 200, f"duress activate failed: {r.text[:200]}"
+        status = sim.call("GET", "/duress/status", headers=sim.auth("verifier")).json()
+        print(f"  verifier declared duress; active={status['active']}, "
+              f"trust surface looks normal (hide-in-plain-sight)")
+        r = sim.download("verifier", asset["id"], **{"X-TrustVault-Location-Scope": "HQ-Floor-3"})
+        reasons = (r.json().get("detail") or {}).get("reasons", []) if r.status_code == 403 else []
+        verdict(r.status_code == 403 and "DURESS_ACTIVE" in reasons,
+                f"even a valid grant is frozen -> 403 DENY {reasons}")
+        sim.call("POST", "/duress/deactivate", headers=sim.auth("verifier"))
+        r = sim.download("verifier", asset["id"], **{"X-TrustVault-Location-Scope": "HQ-Floor-3"})
+        verdict(r.status_code == 200, f"after PIN deactivation access restored ({r.status_code})")
+
     # ---------- D: attack becomes visible ----------
     banner("D - ATTACK: request-storm + auth-failure burst (attacker impersonates verifier)")
     for _ in range(40):
@@ -176,7 +228,7 @@ def main():
     t1 = sim.trust("verifier", verifier_id)
     if t1:
         print(f"  trust during attack: score={t1['trust_score']} decision={t1['decision']}")
-    r = sim.download("verifier", asset["id"])
+    r = sim.download("verifier", asset["id"], **{"X-TrustVault-Location-Scope": "HQ-Floor-3"})
     detail = (r.json().get("detail") or {}) if r.status_code == 403 else {}
     reasons = detail.get("reasons", [])
     ok = r.status_code == 403 and detail.get("decision") == "STEP_UP"

@@ -30,7 +30,11 @@ def request_access(
 
     # Pre-flight: run the pipeline up to the grant check so bad requests are
     # rejected early and the security event is recorded.
-    context = build_context(db, current)
+    context = build_context(
+        db,
+        current,
+        extra={"location_scope": (body.context or {}).get("location_scope")},
+    )
     decision = evaluate_access(db, current, asset, body.purpose, context, check_grant=False)
     record_event(
         db,
@@ -39,8 +43,9 @@ def request_access(
         decision,
         asset_id=asset.id,
         purpose=body.purpose,
+        context_provided=body.context,
     )
-    if decision.decision == "BLOCK":
+    if decision.decision in ("DENY",):
         raise HTTPException(
             status_code=403,
             detail={
@@ -56,6 +61,7 @@ def request_access(
         requester_id=current.id,
         purpose=body.purpose,
         status="pending",
+        context_provided=body.context,
     )
     db.add(req)
     db.commit()
@@ -67,6 +73,7 @@ def request_access(
         purpose=req.purpose,
         status=req.status,
         created_at=req.created_at,
+        context_provided=req.context_provided,
     )
 
 
@@ -91,6 +98,7 @@ def list_requests(
             "purpose": r.purpose,
             "status": r.status,
             "created_at": r.created_at,
+            "context_provided": r.context_provided,
         }
         for r in rows
     ]

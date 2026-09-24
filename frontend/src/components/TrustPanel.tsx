@@ -12,9 +12,10 @@ const COMPONENTS = [
 ]
 
 const DECISION_META: Record<string, { text: string; dot: string }> = {
-  ALLOW: { text: 'Access granted — identity and context look healthy.', dot: 'bg-emerald-400' },
-  STEP_UP: { text: 'Stepped up — extra verification is required right now.', dot: 'bg-amber-400' },
-  BLOCK: { text: 'Blocked — risky signals detected in this context.', dot: 'bg-rose-400' },
+  ALLOW: { text: 'Access granted — identity and context look healthy.', dot: 'bg-emerald-500' },
+  STEP_UP: { text: 'Stepped up — extra verification is required right now.', dot: 'bg-amber-500' },
+  RESTRICTED: { text: 'Restricted — access limited to read-only/limited scope.', dot: 'bg-violet-500' },
+  DENY: { text: 'Denied — risky or invalid signals in this context.', dot: 'bg-rose-500' },
 }
 
 export default function TrustPanel() {
@@ -35,7 +36,11 @@ export default function TrustPanel() {
 
   if (!state) {
     return (
-      <Panel title="Trust score" icon={<ShieldIcon className="h-5 w-5" />}>
+      <Panel
+        title="Trust score"
+        icon={<ShieldIcon className="h-5 w-5" />}
+        help="Your live Trust Engine score. This updates automatically every few seconds based on identity, device, behaviour, context and history signals."
+      >
         <p className="text-sm text-slate-500">Loading trust state…</p>
       </Panel>
     )
@@ -54,6 +59,7 @@ export default function TrustPanel() {
         subtitle={`model ${state.model_version}`}
         icon={<ShieldIcon className="h-5 w-5" />}
         actions={<Badge tone={tone} dot>{state.decision}</Badge>}
+        help="Overall risk score (0-100) computed by the Trust Engine. ALLOW >= 70, STEP_UP 40-69, RESTRICTED for non-strict context misses, DENY < 40 or any hard policy failure. AI/ML may only restrict, never grant."
       >
         <div className="flex flex-col items-center py-4">
           <div className="relative h-32 w-32">
@@ -64,7 +70,7 @@ export default function TrustPanel() {
                   <stop offset="100%" stopColor={color} />
                 </linearGradient>
               </defs>
-              <circle cx="60" cy="60" r={R} fill="none" stroke="#1c2540" strokeWidth="12" />
+              <circle cx="60" cy="60" r={R} fill="none" stroke="#f1f5f9" strokeWidth="12" />
               <circle
                 cx="60"
                 cy="60"
@@ -78,31 +84,35 @@ export default function TrustPanel() {
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-4xl font-bold tracking-tight text-white">{score}</span>
-              <span className="text-[10px] uppercase tracking-widest text-slate-500">/ 100</span>
+              <span className="text-4xl font-bold tracking-tight text-slate-900">{score}</span>
+              <span className="text-[10px] uppercase tracking-widest text-slate-400">/ 100</span>
             </div>
           </div>
 
-          <p className="mt-4 max-w-[240px] text-center text-xs leading-relaxed text-slate-400">
+          <p className="mt-4 max-w-[240px] text-center text-xs leading-relaxed text-slate-600">
             {DECISION_META[state.decision]?.text ?? 'Explainable, weighted trust score.'}
           </p>
 
           {state.ml_signal !== null && (
-            <div className="mt-4 w-full rounded-xl border border-ink-700/70 bg-ink-950/60 px-3 py-2">
+            <div className="mt-4 w-full rounded-xl border border-ink-700 bg-slate-50 px-3 py-2">
               <div className="flex items-center justify-between text-[11px]">
-                <span className="text-slate-500">ML anomaly signal</span>
-                <span className={cn('font-mono', state.ml_signal < 0 ? 'text-amber-300' : 'text-slate-300')}>
+                <span className="text-slate-600">ML anomaly signal</span>
+                <span className={cn('font-mono', state.ml_signal < 0 ? 'text-amber-600' : 'text-slate-800')}>
                   {state.ml_signal.toFixed(3)}
                 </span>
               </div>
-              <p className="mt-0.5 text-[10px] text-slate-600">negative = outlier (Isolation Forest)</p>
+              <p className="mt-0.5 text-[10px] text-slate-500">negative = outlier (Isolation Forest)</p>
             </div>
           )}
         </div>
       </Panel>
 
       <div className="space-y-5 lg:col-span-2">
-        <Panel title="How the score is built" subtitle="Weighted signals, refreshed continuously">
+        <Panel
+          title="How the score is built"
+          subtitle="Weighted signals, refreshed continuously"
+          help="Each component contributes a weighted % to the final score. Low percentages pull trust down; high percentages raise it."
+        >
           <div className="space-y-4">
             {COMPONENTS.map((c) => {
               const v = state.components[c.key] ?? 0
@@ -111,21 +121,18 @@ export default function TrustPanel() {
                 <div key={c.key}>
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-baseline gap-2">
-                      <span className="text-sm font-medium text-slate-200">{c.label}</span>
-                      <span className="text-[11px] text-slate-600">{c.desc}</span>
+                      <span className="text-sm font-medium text-slate-800">{c.label}</span>
+                      <span className="text-[11px] text-slate-500">{c.desc}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs text-slate-400">{v.toFixed(0)}%</span>
-                      <span className="rounded-md border border-ink-700 bg-ink-950/70 px-1.5 py-px font-mono text-[10px] text-slate-500">
+                      <span className="font-mono text-xs text-slate-600">{v.toFixed(0)}%</span>
+                      <span className="rounded-md border border-ink-700 bg-white px-1.5 py-px font-mono text-[10px] text-slate-500">
                         ×{c.weight}%
                       </span>
                     </div>
                   </div>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-ink-800">
-                    <div
-                      className={cn('h-full rounded-full bg-gradient-to-r transition-all duration-700', barColor)}
-                      style={{ width: `${v}%` }}
-                    />
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                    <div className={cn('h-full rounded-full bg-gradient-to-r transition-all duration-700', barColor)} style={{ width: `${v}%` }} />
                   </div>
                 </div>
               )
@@ -136,12 +143,13 @@ export default function TrustPanel() {
         <Panel
           title="Explainability — reason codes"
           subtitle="Every decision is explainable and auditable"
+          help="Reason codes show exactly why the engine chose ALLOW/STEP_UP/RESTRICTED/DENY (e.g. CREDENTIAL_REVOKED, REQUEST_VELOCITY_EXCESSIVE, LOCATION_MISMATCH). They are included in audit logs."
           actions={
             <details className="group text-xs">
-              <summary className="cursor-pointer rounded-lg border border-ink-700 px-2.5 py-1.5 font-medium text-slate-400 transition hover:text-slate-200">
+              <summary className="cursor-pointer rounded-lg border border-ink-700 bg-white px-2.5 py-1.5 font-medium text-slate-600 transition hover:text-slate-900">
                 Raw JSON
               </summary>
-              <pre className="mt-2 max-h-64 overflow-auto rounded-lg border border-ink-800 bg-ink-950 p-3 font-mono text-[10px] leading-relaxed text-slate-400">
+              <pre className="mt-2 max-h-64 overflow-auto rounded-lg border border-ink-700 bg-slate-50 p-3 font-mono text-[10px] leading-relaxed text-slate-700">
                 {JSON.stringify(
                   {
                     trust_score: state.trust_score,
@@ -159,17 +167,12 @@ export default function TrustPanel() {
         >
           <div className="flex flex-wrap gap-2">
             {(state.reasons.length ? state.reasons : ['OK']).map((r) => (
-              <Badge
-                key={r}
-                tone={r.includes('REVOKED') || r.includes('EXCESSIVE') ? 'red' : r === 'OK' || r.includes('KNOWN') ? 'green' : 'amber'}
-              >
+              <Badge key={r} tone={r.includes('REVOKED') || r.includes('EXCESSIVE') ? 'red' : r === 'OK' || r.includes('KNOWN') ? 'green' : 'amber'}>
                 {r}
               </Badge>
             ))}
           </div>
-          {state.reasons.length === 0 && (
-            <p className="mt-2 text-xs text-slate-500">No anomalies — the policy pipeline is running clean.</p>
-          )}
+          {state.reasons.length === 0 && <p className="mt-2 text-xs text-slate-500">No anomalies — the policy pipeline is running clean.</p>}
         </Panel>
       </div>
     </div>

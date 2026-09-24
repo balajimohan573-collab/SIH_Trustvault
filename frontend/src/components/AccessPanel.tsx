@@ -93,24 +93,24 @@ export default function AccessPanel() {
         ) : (
           <div className="space-y-3">
             {requests.map((r) => (
-              <div key={r.id} className="rounded-xl border border-ink-800 bg-ink-950/40 p-4 transition hover:border-ink-700">
+              <div key={r.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-md border border-brand-500/30 bg-brand-500/10 px-1.5 py-0.5 font-mono text-[11px] text-brand-300">
+                  <span className="rounded-md border border-brand-200 bg-brand-50 px-1.5 py-0.5 font-mono text-[11px] text-brand-700">
                     {r.asset_id.slice(0, 8)}…
                   </span>
-                  <span className="text-sm font-medium text-slate-200">{r.purpose}</span>
+                  <span className="text-sm font-medium text-slate-800">{r.purpose}</span>
                   <span className="ml-auto">
                     <Badge tone={r.status === 'approved' ? 'green' : r.status === 'denied' ? 'red' : 'slate'} dot>
                       {r.status}
                     </Badge>
                   </span>
                 </div>
-                <p className="mt-1.5 font-mono text-[10px] text-slate-600">
+                <p className="mt-1.5 font-mono text-[10px] text-slate-500">
                   requester {r.requester_id.slice(0, 10)}… · {new Date(r.created_at).toLocaleString()}
                 </p>
                 {r.status === 'pending' && (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <div className="flex items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-950/60 px-2 py-1.5">
+                    <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
                       <ClockIcon className="h-3.5 w-3.5 text-slate-500" />
                       <input
                         type="number"
@@ -118,13 +118,13 @@ export default function AccessPanel() {
                         min={1}
                         max={1440}
                         id={`dur-${r.id}`}
-                        className="w-14 bg-transparent text-xs text-slate-200 outline-none"
+                        className="w-14 bg-transparent text-xs text-slate-800 outline-none"
                         title="Grant duration in minutes"
                       />
                       <span className="text-[10px] text-slate-500">min</span>
                     </div>
                     <BtnGhost
-                      className="!px-3 !py-1.5 text-xs !text-emerald-300 hover:!border-emerald-500/60 hover:!text-emerald-200"
+                      className="!px-3 !py-1.5 text-xs !text-emerald-600 hover:!border-emerald-400 hover:!text-emerald-700"
                       onClick={() => decide(r.id, 'approve', Number((document.getElementById(`dur-${r.id}`) as HTMLInputElement)?.value ?? 30))}
                     >
                       Approve

@@ -8,8 +8,12 @@ from app.api.assets import router as assets_router
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.credentials import router as credentials_router
+from app.api.dashboard import router as dashboard_router
+from app.api.duress import router as duress_router
 from app.api.health import router as health_router
+from app.api.offline import router as offline_router
 from app.api.rate_limit import RateLimitMiddleware
+from app.api.recovery import router as recovery_router
 from app.api.security import router as security_router
 from app.api.trust import router as trust_router
 from app.core.config import get_settings
@@ -52,3 +56,7 @@ app.include_router(access_router)
 app.include_router(trust_router)
 app.include_router(security_router)
 app.include_router(audit_router)
+app.include_router(dashboard_router)
+app.include_router(offline_router)
+app.include_router(recovery_router)
+app.include_router(duress_router)

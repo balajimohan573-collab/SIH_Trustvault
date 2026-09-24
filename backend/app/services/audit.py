@@ -18,11 +18,19 @@ ANCHORABLE_EVENTS = {
     "credential_issued",
     "credential_revoked",
     "asset_created",
+    "asset_minted",
+    "asset_transferred",
     "access_granted_by_owner",
     "access_denied_by_owner",
     "access_allowed",
-    "access_blocked",
+    "access_denied",
     "admin_override",
+    "duress_activated",
+    "device_revoked",
+    "device_recovery_requested",
+    "device_recovery_approved",
+    "device_recovery_denied",
+    "offline_sync",
 }
 
 

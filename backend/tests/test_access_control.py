@@ -81,7 +81,7 @@ def test_expired_grant_denied(seeded_flow):
 
     r = f["client"].get(f"/assets/{f['asset_id']}/content", headers=f["headers"]["verifier"])
     assert r.status_code == 403
-    assert r.json()["detail"]["decision"] == "BLOCK"
+    assert r.json()["detail"]["decision"] == "DENY"
     assert "GRANT_EXPIRED" in r.json()["detail"]["reasons"]
 
 
@@ -93,7 +93,6 @@ def test_revoked_credential_denied(seeded_flow):
 
     # Revoke the verifier's credential.
     client = f["client"]
-    cred_id = f["credential_id"]
     # (f["credential_id"] belongs to the HOLDER; revoke verifier's credential.)
     with SessionLocal() as db:
         from app.models import Credential, User
@@ -107,7 +106,7 @@ def test_revoked_credential_denied(seeded_flow):
 
     r = client.get(f"/assets/{f['asset_id']}/content", headers=f["headers"]["verifier"])
     assert r.status_code == 403
-    assert r.json()["detail"]["decision"] == "BLOCK"
+    assert r.json()["detail"]["decision"] == "DENY"
     assert "CREDENTIAL_REVOKED" in r.json()["detail"]["reasons"]
     assert verifier_cred
 
@@ -149,9 +148,9 @@ def test_suspicious_velocity_steps_up(seeded_flow):
     r = f["client"].get(f"/assets/{f['asset_id']}/content", headers=f["headers"]["verifier"])
     assert r.status_code == 403
     body = r.json()["detail"]
-    # thresholds: rpm>=120 -> BLOCK, rpm>=40 -> STEP_UP (50 events -> high velocity)
+    # thresholds: rpm>=120 -> DENY, rpm>=40 -> STEP_UP (50 events -> high velocity)
     assert "REQUEST_VELOCITY_HIGH" in body["reasons"], body
-    assert body["decision"] in ("STEP_UP", "BLOCK")
+    assert body["decision"] in ("STEP_UP", "DENY")
 
 
 def test_suspicious_velocity_excessive_denies_per_policy(seeded_flow):
@@ -170,7 +169,7 @@ def test_suspicious_velocity_excessive_denies_per_policy(seeded_flow):
     r = f["client"].get(f"/assets/{f['asset_id']}/content", headers=f["headers"]["verifier"])
     assert r.status_code == 403
     assert "REQUEST_VELOCITY_EXCESSIVE" in r.json()["detail"]["reasons"]
-    assert r.json()["detail"]["decision"] == "BLOCK"
+    assert r.json()["detail"]["decision"] == "DENY"
 
 
 # ---------------------------------------------------------------- Scenario 7
@@ -204,3 +203,85 @@ def test_admin_override_ignored_for_non_admin(seeded_flow):
     )
     assert r.status_code == 403
     assert "ADMIN_OVERRIDE" not in r.json()["detail"]["reasons"]
+
+
+# ---------------------------------------------------------------- V2: location policy (optional, policy-based)
+def _set_location_policy(location_scope, strict):
+    with SessionLocal() as db:
+        from app.models import AccessPolicy
+
+        p = db.query(AccessPolicy).filter(AccessPolicy.purpose == "employment").first()
+        p.location_scope = location_scope
+        p.location_strict = strict
+        db.commit()
+
+
+def test_location_policy_missing_context_is_read_only(seeded_flow):
+    f = seeded_flow
+    _set_location_policy("nellai_office", strict=False)
+    req = f["request_access"]()  # pre-flight: RESTRICTED is not DENY -> request created
+    f["approve"](req["id"])
+
+    r = f["client"].get(f"/assets/{f['asset_id']}/content", headers=f["headers"]["verifier"])
+    assert r.status_code == 403, r.text
+    detail = r.json()["detail"]
+    assert detail["decision"] == "RESTRICTED", detail
+    assert detail["scope"] == "read-only", detail
+    assert "LOCATION_MISSING" in detail["reasons"], detail
+    # Human-friendly decision layer present for the UI.
+    assert detail.get("human"), detail
+    assert detail.get("next_action"), detail
+
+
+def test_location_policy_strict_mismatch_denies(seeded_flow):
+    f = seeded_flow
+    req = f["request_access"]()
+    f["approve"](req["id"])
+    _set_location_policy("nellai_office", strict=True)
+
+    r = f["client"].get(f"/assets/{f['asset_id']}/content", headers=f["headers"]["verifier"])
+    assert r.status_code == 403
+    detail = r.json()["detail"]
+    assert detail["decision"] == "DENY", detail
+    assert "LOCATION_MISSING" in detail["reasons"] or "LOCATION_MISMATCH" in detail["reasons"]
+
+
+def test_location_policy_matching_header_allows(seeded_flow):
+    f = seeded_flow
+    req = f["request_access"]()
+    f["approve"](req["id"])
+    _set_location_policy("nellai_office", strict=True)
+
+    r = f["client"].get(
+        f"/assets/{f['asset_id']}/content",
+        headers={
+            **f["headers"]["verifier"],
+            "X-TrustVault-Location-Scope": "nellai_office",
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.content == b"EMPLOYMENT REPORT"
+
+
+# ---------------------------------------------------------------- V2: AI may only restrict (never grant)
+def test_ml_signal_never_grants():
+    from app.services.trust import evaluate_trust
+
+    def ctx(ml):
+        return {
+            "identity": {"has_active_credential": True, "credential_revoked": False, "recent_auth_failures": 0},
+            "device": {"status": "active", "novel": False},
+            "behaviour": {"requests_per_minute": 0, "access_sequence": None},
+            "context": {"hour": 12, "geo_penalty": 0.0},
+            "history": {"recent_anomalies": 0},
+            "ml_signal": ml,
+        }
+
+    # Strong anomaly -> DENY even with a perfect 100 score.
+    assert evaluate_trust(ctx(-0.7)).decision == "DENY"
+    # Moderate anomaly -> at most RESTRICTED (never ALLOW).
+    moderate = evaluate_trust(ctx(-0.4))
+    assert moderate.decision in ("RESTRICTED", "DENY")
+    assert moderate.decision != "ALLOW"
+    # Clean context with no ML -> ALLOW.
+    assert evaluate_trust(ctx(None)).decision == "ALLOW"

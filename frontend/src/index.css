@@ -4,24 +4,24 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
 
-  --color-ink-950: #060913;
-  --color-ink-900: #0a0f1f;
-  --color-ink-850: #0e1528;
-  --color-ink-800: #141c33;
-  --color-ink-700: #223054;
-  --color-ink-600: #33416d;
+  --color-ink-950: #ffffff;
+  --color-ink-900: #ffffff;
+  --color-ink-850: #fafafa;
+  --color-ink-800: #f6f7f8;
+  --color-ink-700: #e5e7eb;
+  --color-ink-600: #d1d5db;
 
-  --color-brand-50: #eef2ff;
-  --color-brand-100: #e0e7ff;
-  --color-brand-200: #c7d1fe;
-  --color-brand-300: #a5b4fc;
-  --color-brand-400: #818cf8;
-  --color-brand-500: #6366f1;
-  --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca;
-  --color-brand-800: #3730a3;
-  --color-brand-900: #312e81;
-  --color-brand-950: #1e1b4b;
+  --color-brand-50: #fff1f2;
+  --color-brand-100: #ffe4e6;
+  --color-brand-200: #fecdd3;
+  --color-brand-300: #fda4af;
+  --color-brand-400: #fb7185;
+  --color-brand-500: #f43f5e;
+  --color-brand-600: #e11d48;
+  --color-brand-700: #be123c;
+  --color-brand-800: #9f1239;
+  --color-brand-900: #881337;
+  --color-brand-950: #4c0519;
 
   --animate-fade-up: fade-up 0.45s ease both;
 
@@ -38,27 +38,27 @@
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
   margin: 0;
-  background-color: var(--color-ink-950);
+  background-color: #ffffff;
   background-image:
-    radial-gradient(60rem 42rem at 88% -12%, rgb(99 102 241 / 0.16), transparent 62%),
-    radial-gradient(52rem 36rem at -12% 12%, rgb(139 92 246 / 0.12), transparent 60%),
-    radial-gradient(40rem 30rem at 50% 110%, rgb(14 165 233 / 0.07), transparent 60%);
+    radial-gradient(58rem 40rem at 92% -12%, rgb(244 63 94 / 0.07), transparent 60%),
+    radial-gradient(46rem 32rem at -8% 8%, rgb(244 63 94 / 0.06), transparent 58%),
+    radial-gradient(38rem 28rem at 50% 112%, rgb(251 113 133 / 0.06), transparent 60%);
   background-attachment: fixed;
-  @apply font-sans text-slate-100 antialiased;
+  @apply font-sans text-slate-900 antialiased;
 }
 
 ::selection {
-  background: rgb(99 102 241 / 0.4);
+  background: rgb(244 63 94 / 0.22);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2b3550 transparent;
+  scrollbar-color: #d1d5db transparent;
 }
 
 *::-webkit-scrollbar {
@@ -67,7 +67,7 @@ body {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: #2b3550;
+  background: #d1d5db;
   border: 2px solid transparent;
   border-radius: 8px;
   background-clip: content-box;
@@ -78,6 +78,6 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid rgb(129 140 248 / 0.7);
+  outline: 2px solid rgb(244 63 94 / 0.75);
   outline-offset: 2px;
 }

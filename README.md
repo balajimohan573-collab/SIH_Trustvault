@@ -31,7 +31,7 @@ re-evaluates as the holder's security context evolves.
  Verifier ──request──▶  Policy pipeline (8 steps)
    │                    1-4 RBAC/ABAC (role, purpose, grant, expiry)
    │                    5-7 Trust Engine (identity/device/behaviour/
-   │                     context/history) -> ALLOW | STEP_UP | BLOCK
+   │                     context/history) -> ALLOW | STEP_UP | RESTRICTED | DENY
    └──▶ Decision ──▶ Audit event ──▶ on-chain anchor
 ```
 
@@ -41,7 +41,7 @@ Monorepo layout:
 |-------------|-----------------------------------------|
 | `backend/`  | FastAPI + SQLAlchemy API, policy + trust engine, audit anchoring (web3.py) |
 | `frontend/` | React 19 + Vite + Tailwind v4 dashboard |
-| `contracts/`| Hardhat + Solidity 0.8.24 registry contracts |
+| `contracts/`| Hardhat + Solidity 0.8.25 (Cancun EVM) registry contracts |
 | `docker-compose.yml` | Postgres 16 for when you want it |
 
 ## Quickstart (all free / open-source)
@@ -85,21 +85,21 @@ npx hardhat run scripts/deploy.ts --network localhost   # smoke deploy
 
 ```powershell
 cd backend
-.\.venv\Scripts\python.exe -m pytest tests -v          # 9 scenario tests
+.\.venv\Scripts\python.exe -m pytest tests -v          # 23 V2 scenario tests
 ```
 
 ## Demo runbooks
 
 | Script | Story |
 |---|---|
-| `DEMO_SCRIPT.md` | The 3–5 minute scripted demo: login -> upload -> grant -> ALLOW -> attack -> STEP_UP/BLOCK -> revocation -> anchored audit |
-| `backend/scripts/demo.py` | Happy path: issue credentials -> upload encrypted doc -> scope purpose -> time-bound grant -> download -> trust score -> audit anchors |
-| `backend/scripts/attack_sim.py` | Attack journey: forged JWT, IDOR, velocity/auth-failure storm collapses trust ALLOW->STEP_UP, admin override (audited), instant revocation |
+| `DEMO_SCRIPT.md` | The 3–5 minute scripted demo (Ravi journey): login -> VC -> encrypted asset + NFT -> context policy -> ALLOW -> RESTRICTED -> QR proof -> transfer -> anchored audit |
+| `backend/scripts/demo.py` | Ravi happy path: issue education VC -> upload encrypted doc (ERC-721 pending) -> context-aware policy -> time-bound grant -> ALLOW / RESTRICTED when context missing -> QR verify -> NFT transfer -> trust score -> audit anchors + offline sync |
+| `backend/scripts/attack_sim.py` | Attack journey: forged JWT, IDOR, velocity/auth-failure storm collapses trust ALLOW->STEP_UP, RESTRICTED on context mismatch, admin override (audited), instant revocation, optional duress freeze |
 | `backend/scripts/smoke_auth.py`, `smoke_assets.py` | Stage smoke checks (WebAuthn ceremony, encrypted round-trip) |
 
 Reset between runs: `backend/scripts/reset_db.py --yes`, then restart the API.
 
-## Trust Engine (v1, explainable)
+## Trust Engine (V2, explainable)
 
 Weighted, additive, fully explainable scores:
 
@@ -111,23 +111,39 @@ Weighted, additive, fully explainable scores:
 | Context (15%) | unusual hour, geo penalty |
 | History (15%) | recent anomaly decisions |
 
-Score bands: **ALLOW ≥ 70**, **STEP_UP 40–69**, **BLOCK < 40**, with a rule
-layer that forces STEP_UP on a new device, velocity bursts or detected
-anomalies, and BLOCK on excessive bursts. Hard policy failures (revoked
-credential/device, expired grant, wrong purpose/no policy) are always
-authoritative over the numeric score. An optional Isolation Forest anomaly
-layer (`ML_ANOMALY_ENABLED=true`) deepens but never overrides the rules.
+Four-way decision gate:
+
+| Decision | Meaning |
+|---|---|
+| **ALLOW** | score ≥ 70 and every policy + context check passes |
+| **STEP_UP** | score 40–69 (e.g. new device, velocity burst) — extra proof required |
+| **RESTRICTED** | policy satisfiable but declared context is missing/mismatched (non-strict) — read-only, never exposes content |
+| **DENY** | score < 40 **or any hard policy failure** (revoked credential/device, expired grant, wrong purpose, `DURESS_ACTIVE`) — always authoritative |
+
+The AI/ML anomaly layer (`ML_ANOMALY_ENABLED=true`,
+`ML_TRUST_CAP_DECISIONS_LEGACY=false` in V2) can only **downgrade** a decision
+(never grant): ALLOW -> STEP_UP / RESTRICTED, STEP_UP -> DENY. Hard policy
+failures always override the numeric score. Every endpoint returns a
+human-readable explanation plus the exact reason codes used.
 
 ## API surface
 
 | Area | Endpoints |
 |---|---|
-| Auth | `/auth/register/start|complete`, `/auth/login/start|complete`, `/auth/login/dev`, `/auth/me`, `/auth/logout`, `/auth/devices` |
-| Credentials | `POST /credentials/issue`, `GET /credentials?holder=me`, `GET /credentials/{id}/verify`, `POST /credentials/{id}/revoke` |
-| Assets | `POST /assets`, `GET /assets`, `GET /assets/{id}/content`, `POST /assets/{id}/policy` |
+| Auth | `/auth/register/start|complete`, `/auth/login/start|complete`, `/auth/login/dev`, `/auth/me`, `/auth/logout`, `/auth/devices`, `GET /auth/users` |
+| Credentials | `POST /credentials/issue`, `GET /credentials?holder=me`, `GET /credentials/{id}/verify`, `POST /credentials/{id}/revoke`, `POST /credentials/qr/generate`, `POST /credentials/qr/verify` (public) |
+| Assets | `POST /assets`, `GET /assets`, `GET /assets/{id}/content`, `POST /assets/{id}/policy`, `POST /assets/{id}/transfer`, `GET /assets/{id}/ownership` |
 | Access | `POST /access/request`, `GET /access`, `POST /access/{id}/approve|deny` |
 | Trust & telemetry | `GET /trust/{user_id}`, `POST|GET /security/events` |
 | Audit | `GET /audit/{asset_id}` (anchor status per event) |
+| Dashboard | `GET /dashboard/summary?technical=` (role-scoped KPI + technical view) |
+| Offline | `POST /offline/queue`, `POST /offline/sync`, `GET /offline/events` |
+| Recovery | `POST /recovery/request`, `GET /recovery`, `POST /recovery/{id}/decide?status=` |
+| Duress | `GET /duress/status`, `POST /duress/activate|deactivate` (feature-gated) |
+
+Assets are ERC-721 NFTs: upload mints a token (when `CHAIN_ENABLED=true`),
+transfers update on-chain custody, and `GET /assets/{id}/ownership` returns the
+full custody history.
 
 Admin override: `X-TrustVault-Admin-Override: 1` forces ALLOW **only** for
 the admin role and always writes a privileged, anchored audit entry.

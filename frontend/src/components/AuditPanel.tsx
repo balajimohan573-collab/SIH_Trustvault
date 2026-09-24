@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, type Asset } from '../api'
 import { Badge, EmptyState, Notice, Panel, BtnPrimary, Select, decisionTone, cn } from './ui'
-import { CheckIcon, FileTextIcon, XIcon, AlertIcon } from './icons'
+import { CheckIcon, FileTextIcon, XIcon, AlertIcon, InfoIcon } from './icons'
 
 type AuditRow = {
   event_id: string
@@ -66,40 +66,43 @@ export default function AuditPanel() {
       <div className="mt-5 space-y-3">
         {rows.map((r) => {
           const tone = r.decision ? decisionTone(r.decision) : 'slate'
-          const Icon = r.decision === 'ALLOW' ? CheckIcon : r.decision === 'STEP_UP' ? AlertIcon : XIcon
+          const Icon =
+            r.decision === 'ALLOW' ? CheckIcon : r.decision === 'STEP_UP' ? AlertIcon : r.decision === 'RESTRICTED' ? InfoIcon : XIcon
           return (
-            <div key={r.event_id} className="rounded-xl border border-ink-800 bg-ink-950/40 p-4 transition hover:border-ink-700">
+            <div key={r.event_id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300">
               <div className="flex flex-wrap items-center gap-2">
                 <div
                   className={cn(
                     'grid h-7 w-7 place-items-center rounded-lg border',
                     tone === 'green'
-                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
                       : tone === 'amber'
-                        ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
-                        : 'border-rose-500/40 bg-rose-500/10 text-rose-300',
+                        ? 'border-amber-200 bg-amber-50 text-amber-600'
+                        : tone === 'violet'
+                          ? 'border-violet-200 bg-violet-50 text-violet-600'
+                          : 'border-rose-200 bg-rose-50 text-rose-600',
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" />
                 </div>
-                <span className="rounded-md border border-brand-500/30 bg-brand-500/10 px-1.5 py-0.5 font-mono text-[11px] text-brand-300">
+                <span className="rounded-md border border-brand-200 bg-brand-50 px-1.5 py-0.5 font-mono text-[11px] text-brand-700">
                   {r.event_type}
                 </span>
                 {r.decision && <Badge tone={tone}>{r.decision}</Badge>}
                 {r.trust_score !== null && (
-                  <span className="font-mono text-[11px] text-slate-400">trust {r.trust_score}</span>
+                  <span className="font-mono text-[11px] text-slate-500">trust {r.trust_score}</span>
                 )}
-                <span className="ml-auto font-mono text-[10px] text-slate-600">
+                <span className="ml-auto font-mono text-[10px] text-slate-500">
                   {new Date(r.created_at).toLocaleString()}
                 </span>
               </div>
 
               {r.anchor && (
-                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-ink-800 bg-ink-900/60 px-3 py-2">
+                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                   <Badge tone={r.anchor.status === 'anchored' ? 'green' : 'amber'} dot>
                     {r.anchor.status}
                   </Badge>
-                  <span className="font-mono text-[10px] text-slate-400">
+                  <span className="font-mono text-[10px] text-slate-500">
                     {r.anchor.chain} · {r.anchor.tx_hash}
                   </span>
                 </div>
@@ -107,10 +110,10 @@ export default function AuditPanel() {
 
               {Object.keys(r.risk_signals ?? {}).length > 0 && (
                 <details className="mt-2 group">
-                  <summary className="cursor-pointer text-[11px] text-slate-500 transition hover:text-slate-300">
+                  <summary className="cursor-pointer text-[11px] text-slate-500 transition hover:text-slate-700">
                     Risk signals
                   </summary>
-                  <pre className="mt-2 overflow-auto rounded-lg border border-ink-800 bg-ink-950 p-2.5 font-mono text-[10px] leading-relaxed text-slate-400">
+                  <pre className="mt-2 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-2.5 font-mono text-[10px] leading-relaxed text-slate-500">
                     {JSON.stringify(r.risk_signals, null, 2)}
                   </pre>
                 </details>

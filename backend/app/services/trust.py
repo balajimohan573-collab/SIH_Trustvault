@@ -1,4 +1,4 @@
-"""Trust Engine V1 — rules-based, explainable.
+"""Trust Engine V2 — rules-based, explainable.
 
 Weighted components:
     Identity    30%   (credential validity, recent auth failures)
@@ -10,10 +10,18 @@ Weighted components:
 Trust score 0..100 maps to:
     >= 70  -> ALLOW
     40-69  -> STEP_UP
-    <  40  -> BLOCK
+    <  40  -> DENY
+
+V2 authoritative decision set: ALLOW | STEP_UP | RESTRICTED | DENY.
+
+AI/ML restriction (downward only):
+    - Moderate anomaly  (-0.6 <= ml_signal < -0.3): maybe RESTRICTED
+    - Strong anomaly    (ml_signal < -0.6):                    -> DENY
+    The ML signal can only restrict/reduce/freeze a decision. There is NO path
+    from a negative ML signal to a higher-privilege decision.
 
 Hard policy failures (revoked credential, expired/no grant, wrong purpose,
-no policy) short-circuit to BLOCK regardless of the numeric score.
+no policy) short-circuit to DENY regardless of the numeric score.
 """
 import logging
 from dataclasses import dataclass, field
@@ -32,7 +40,11 @@ WEIGHTS = {
 ALLOW_THRESHOLD = 70
 STEP_UP_THRESHOLD = 40
 
-MODEL_VERSION = "rules-v1"
+# AI/ML restriction thresholds (non-increasing effect only).
+ML_RESTRICT_THRESHOLD = -0.3  # moderate anomaly -> can RESTRICT
+ML_BLOCK_THRESHOLD = -0.6  # strong anomaly -> DENY
+
+MODEL_VERSION = "rules-v2"
 
 REASON_MESSAGES = {
     "OK_CREDENTIAL": "Active credential present",
@@ -54,7 +66,7 @@ REASON_MESSAGES = {
 @dataclass
 class TrustState:
     trust_score: int
-    decision: str  # ALLOW | STEP_UP | BLOCK
+    decision: str  # ALLOW | STEP_UP | RESTRICTED | DENY
     reasons: list[str] = field(default_factory=list)
     components: dict[str, float] = field(default_factory=dict)
     ml_signal: float | None = None
@@ -165,25 +177,35 @@ def evaluate_trust(context: dict[str, Any]) -> TrustState:
             break
 
     if hard:
-        decision = "BLOCK"
+        decision = "DENY"
     elif score >= ALLOW_THRESHOLD:
         decision = "ALLOW"
     elif score >= STEP_UP_THRESHOLD:
         decision = "STEP_UP"
     else:
-        decision = "BLOCK"
+        decision = "DENY"
 
     # Rule layer: reason codes can override the numeric band. This is what makes
     # an otherwise-clean user STEP_UP on a brand-new device or a velocity burst.
+    # Rules may only downgrade a decision, never upgrade it.
     if decision == "ALLOW":
         if "REQUEST_VELOCITY_EXCESSIVE" in reasons:
-            decision = "BLOCK"  # excessive burst is a hard-ish signal
+            decision = "DENY"  # excessive burst is a hard-ish signal
         elif {
             "NEW_DEVICE",
             "REQUEST_VELOCITY_HIGH",
             "ANOMALY_DETECTED",
         }.intersection(reasons):
             decision = "STEP_UP"
+
+    # AI/ML restriction is strictly downward-only. There is NO branch that lets
+    # a negative ML signal move a decision toward a higher-privilege state.
+    if ml_signal is not None and ml_signal < ML_BLOCK_THRESHOLD:
+        decision = "DENY"
+    elif ml_signal is not None and ml_signal < ML_RESTRICT_THRESHOLD:
+        # Moderate anomaly: at most RESTRICTED (read-only / limited scope).
+        if decision in ("ALLOW", "STEP_UP"):
+            decision = "RESTRICTED"
 
     return TrustState(
         trust_score=score,

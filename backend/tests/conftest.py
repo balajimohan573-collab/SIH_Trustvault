@@ -43,9 +43,13 @@ def _clean_db():
         AccessPolicy,
         AccessRequest,
         Asset,
+        AssetTransfer,
         AuditAnchor,
         Credential,
         Device,
+        DeviceRecovery,
+        DuressSession,
+        OfflineEvent,
         SecurityEvent,
         User,
         WebAuthnCredential,
@@ -55,8 +59,20 @@ def _clean_db():
     try:
         for model in reversed(
             [
-                WebAuthnCredential, Device, AuditAnchor, SecurityEvent,
-                AccessGrant, AccessRequest, AccessPolicy, Credential, Asset, User,
+                AssetTransfer,
+                OfflineEvent,
+                DeviceRecovery,
+                DuressSession,
+                WebAuthnCredential,
+                Device,
+                AuditAnchor,
+                SecurityEvent,
+                AccessGrant,
+                AccessRequest,
+                AccessPolicy,
+                Credential,
+                Asset,
+                User,
             ]
         ):
             session.query(model).delete()

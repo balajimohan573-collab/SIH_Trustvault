@@ -30,7 +30,7 @@ _EVENT_TYPE_TO_SIG = {
 
 
 def _get_rpc() -> Web3 | None:
-    if not settings.rpc_url:
+    if not settings.chain_enabled or not settings.rpc_url:
         return None
     w3 = Web3(Web3.HTTPProvider(settings.rpc_url))
     return w3 if w3.is_connected() else None
@@ -93,36 +93,56 @@ def _submit_anchor(
 
 
 _ASSET_ABI = [
+    # AssetRegistry (V2, ERC-721): mintAsset(address,bytes32,string,string) -> uint256
     {
         "type": "function",
-        "name": "registerAsset",
+        "name": "mintAsset",
         "stateMutability": "nonpayable",
         "inputs": [
-            {"name": "assetId", "type": "bytes32"},
-            {"name": "ownerDidHash", "type": "bytes32"},
+            {"name": "to", "type": "address"},
             {"name": "fileHash", "type": "bytes32"},
+            {"name": "ownerDidRef", "type": "string"},
+            {"name": "cid", "type": "string"},
         ],
-        "outputs": [{"name": "", "type": "bool"}],
-    }
+        "outputs": [{"name": "tokenId", "type": "uint256"}],
+    },
+    {
+        "type": "function",
+        "name": "nextTokenId",
+        "stateMutability": "view",
+        "inputs": [],
+        "outputs": [{"name": "", "type": "uint256"}],
+    },
 ]
 
 
-def register_asset_onchain(asset_id: str, owner_did_hash: str, file_hash: str) -> str | None:
-    """Best-effort asset registration on the AssetRegistry. Returns tx hash or None."""
-    if not (settings.rpc_url and settings.private_key and settings.asset_registry_address):
-        return None
+def register_asset_onchain(
+    asset_id: str, owner_did: str, file_hash: str, cid: str | None = None
+) -> tuple[str | None, str | None]:
+    """Best-effort NFT mint on the AssetRegistry (ERC-721).
+
+    Returns (token_id, tx_hash) or (None, None) when chain is not configured/
+    reachable. Never blocks the upload path.
+    """
+    if not (
+        settings.chain_enabled
+        and settings.rpc_url
+        and settings.private_key
+        and settings.asset_registry_address
+    ):
+        return None, None
     w3 = _get_rpc()
     if w3 is None:
-        return None
+        return None, None
     try:
         acct = _wallet(w3, settings.private_key)
         contract = w3.eth.contract(
             address=Web3.to_checksum_address(settings.asset_registry_address), abi=_ASSET_ABI
         )
+        file_hash_bytes = w3.keccak(text=file_hash) if len(file_hash) != 66 else bytes.fromhex(file_hash[2:])
         pid = w3.keccak(text=f"trustvault:{asset_id}")
-        owner_hash = w3.keccak(text=owner_did_hash or settings.jwt_secret)
-        file_hash_bytes = w3.keccak(text=file_hash)
-        call = contract.functions.registerAsset(pid, owner_hash, file_hash_bytes)
+        owner_ref = owner_did or f"did:trustvault:ops:{pid.hex()}"
+        call = contract.functions.mintAsset(acct.address, file_hash_bytes, owner_ref, cid or "")
         tx = call.build_transaction(
             {
                 "from": acct.address,
@@ -133,11 +153,12 @@ def register_asset_onchain(asset_id: str, owner_did_hash: str, file_hash: str) -
         )
         signed = acct.sign_transaction(tx)
         tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
-        log.info("Asset %s registered on chain -> %s", asset_id, Web3.to_hex(tx_hash))
-        return Web3.to_hex(tx_hash)
+        token_id = str(contract.functions.nextTokenId().call() - 1)
+        log.info("Asset %s minted as NFT token %s -> %s", asset_id, token_id, Web3.to_hex(tx_hash))
+        return token_id, Web3.to_hex(tx_hash)
     except Exception as exc:  # noqa: BLE001 - never block the upload path
         log.warning("Asset on-chain registration skipped for %s: %s", asset_id, exc)
-        return None
+        return None, None
 
 
 def sync_pending(db: Session) -> int:
@@ -150,7 +171,7 @@ def sync_pending(db: Session) -> int:
     rpc_url = cfg.rpc_url
     private_key = cfg.private_key
     audit_registry = cfg.audit_registry_address
-    if not (rpc_url and private_key and audit_registry):
+    if not (cfg.chain_enabled and rpc_url and private_key and audit_registry):
         log.info("Chain not configured (rpc/private_key/registry) — %d anchor(s) stay pending", len(pending))
         return 0
 

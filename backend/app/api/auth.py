@@ -42,6 +42,19 @@ settings = get_settings()
 log = logging.getLogger("trustvault.auth")
 
 
+@router.get("/users")
+def list_users(
+    current: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Lightweight directory of active users (for NFT transfers, consent flows)."""
+    rows = db.query(User).filter(User.status == "active").all()
+    return [
+        {"id": u.id, "email": u.email, "did": u.did, "role": u.role}
+        for u in sorted(rows, key=lambda x: x.email)
+    ]
+
+
 def _b64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).decode().rstrip("=")
 
