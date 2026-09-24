@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { qrApi } from '../api'
-import { Badge, Notice, Panel, BtnPrimary, Field, Textarea, Tip } from './ui'
+import { Badge, Notice, Panel, BtnPrimary, Field, Textarea, Tip, SpeakerButton } from './ui'
 import { QrCodeIcon, CheckIcon } from './icons'
+import { useLang, tr } from '../i18n'
 
 type QrResult = {
   id: string
@@ -33,6 +34,7 @@ export default function VerifyPanel() {
   const [result, setResult] = useState<QrResult | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const lang = useLang()
 
   async function verify() {
     setBusy(true)
@@ -50,8 +52,8 @@ export default function VerifyPanel() {
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
       <Panel
-        title="Verify a credential QR"
-        subtitle="Paste the short-lived token the holder generated"
+        title={tr(lang, 'verify_title')}
+        subtitle={tr(lang, 'verify_paste')}
         icon={<QrCodeIcon className="h-5 w-5" />}
         help="The QR token is an HMAC-signed, short-lived JWT bound to exactly one credential + purpose. Anyone with the token can verify it: the signature proves it came from this platform and the 5-minute expiry bounds its lifetime. Only minimal claims are disclosed (validity, type, holder DID, purpose) - never the raw document."
       >
@@ -67,7 +69,7 @@ export default function VerifyPanel() {
           </Field>
           <div className="flex flex-wrap items-center gap-2">
             <BtnPrimary onClick={verify} disabled={!token.trim() || busy}>
-              {busy ? 'Verifying...' : 'Verify credential'}
+              {busy ? tr(lang, 'verify_btn_busy') : tr(lang, 'verify_btn')}
             </BtnPrimary>
             {auto && (
               <Tip label="This token was picked up from a shared QR link (#/verify?token=...).">
@@ -80,8 +82,8 @@ export default function VerifyPanel() {
       </Panel>
 
       <Panel
-        title="Verification result"
-        subtitle="Signature + short expiry = forward proof; status = live registry state"
+        title={tr(lang, 'verify_result_title')}
+        subtitle={tr(lang, 'verify_result_sub')}
         icon={<CheckIcon className="h-5 w-5" />}
       >
         {!result ? (
@@ -89,7 +91,7 @@ export default function VerifyPanel() {
             <div className="grid h-14 w-14 place-items-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400">
               <QrCodeIcon className="h-7 w-7" />
             </div>
-            <p className="text-sm font-medium text-slate-600">No verification yet</p>
+            <p className="text-sm font-medium text-slate-600">{tr(lang, 'verify_none')}</p>
             <p className="max-w-xs text-xs text-slate-400">
               Scan a holder's QR or paste its token here. The result proves the credential exists, is signed by the
               platform, and has not been revoked.
@@ -105,11 +107,16 @@ export default function VerifyPanel() {
           >
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={result.valid ? 'green' : 'red'} dot>
-                {result.valid ? 'VALID' : 'INVALID'}
+                {result.valid ? tr(lang, 'verify_valid') : tr(lang, 'verify_invalid')}
               </Badge>
               <span className="font-mono text-[10px] uppercase tracking-wider text-slate-500">status · {result.status}</span>
             </div>
-            {result.explanation && <p className="mt-2 text-sm font-medium text-slate-800">{result.explanation}</p>}
+            {result.explanation && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <p className="text-sm font-medium text-slate-800">{result.explanation}</p>
+                <SpeakerButton text={result.explanation} tone={result.valid ? 'green' : 'red'} />
+              </div>
+            )}
             <dl className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {[
                 ['Credential id', result.id],

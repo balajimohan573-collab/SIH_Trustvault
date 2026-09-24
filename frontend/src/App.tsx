@@ -22,10 +22,23 @@ import {
   QrCodeIcon,
 } from './components/icons'
 import { cn, Tip } from './components/ui'
+import LanguageSwitcher from './components/LanguageSwitcher'
+import { useLang, tr } from './i18n'
 
 type Tab = 'dashboard' | 'verify' | 'trust' | 'timeline' | 'credentials' | 'assets' | 'access' | 'audit'
 
 type IconCmp = (props: SVGProps<SVGSVGElement>) => ReactElement
+
+const NAV_TAB: Record<Tab, string> = {
+  dashboard: 'nav_dashboard',
+  verify: 'nav_verify',
+  trust: 'nav_trust',
+  timeline: 'nav_timeline',
+  credentials: 'nav_credentials',
+  assets: 'nav_assets',
+  access: 'nav_access',
+  audit: 'nav_audit',
+}
 
 const NAV: { id: Tab; label: string; sub: string; icon: IconCmp; roles: string[]; tip: string }[] = [
   { id: 'dashboard', label: 'Dashboard', sub: 'Role-scoped overview + technical view', icon: DashboardIcon, roles: [], tip: 'Role-scoped summary: identity, credentials, assets/NFT custody, pending requests, security posture, quick actions (offline sync, device recovery, duress) and a Technical view for admins/auditors.' },
@@ -49,6 +62,7 @@ const ROLE_STYLES: Record<string, string> = {
 }
 
 function Brand() {
+  const lang = useLang()
   return (
     <div className="flex items-center gap-3">
       <div className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-rose-600 shadow-lg shadow-brand-600/20">
@@ -56,7 +70,7 @@ function Brand() {
       </div>
       <div className="min-w-0">
         <p className="text-base font-bold tracking-tight text-slate-900">TrustVault</p>
-        <p className="truncate text-[11px] text-slate-500">Verify once. Control access everywhere.</p>
+        <p className="truncate text-[11px] text-slate-500">{tr(lang, 'tagline')}</p>
       </div>
     </div>
   )
@@ -65,6 +79,7 @@ function Brand() {
 function App() {
   const [user, setUser] = useState<any>(getCurrentUser())
   const [tab, setTab] = useState<Tab>('dashboard')
+  const lang = useLang()
 
   if (!user) return <Login onLogin={setUser} />
 
@@ -82,7 +97,10 @@ function App() {
     <div className="min-h-screen">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 flex-col border-r border-ink-700 bg-white/80 backdrop-blur-xl lg:flex">
         <div className="px-6 py-6">
-          <Brand />
+          <div className="flex items-center justify-between gap-3">
+            <Brand />
+            <LanguageSwitcher />
+          </div>
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3">
@@ -107,7 +125,7 @@ function App() {
                       isActive ? 'text-brand-600' : 'text-slate-400 group-hover:text-slate-600',
                     )}
                   />
-                  <span className="flex-1 text-left">{t.label}</span>
+                  <span className="flex-1 text-left">{tr(lang, NAV_TAB[t.id])}</span>
                   {isActive && (
                     <span className="h-1.5 w-1.5 rounded-full bg-brand-500 shadow-[0_0_10px] shadow-brand-500/60" />
                   )}
@@ -130,7 +148,7 @@ function App() {
                 </span>
               </div>
             </div>
-            <Tip label="Sign out of your current session (clears auth token and returns to login).">
+            <Tip label={tr(lang, 'signout_tip')}>
               <button
                 onClick={logout}
                 className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-ink-600 text-slate-500 transition hover:border-rose-400 hover:bg-rose-50 hover:text-rose-600"
@@ -144,8 +162,9 @@ function App() {
 
       <div className="lg:pl-72">
         <header className="sticky top-0 z-30 border-b border-ink-700 bg-white/90 backdrop-blur lg:hidden">
-          <div className="px-4 py-3">
+          <div className="flex items-center justify-between gap-3 px-4 py-3">
             <Brand />
+            <LanguageSwitcher />
           </div>
           <nav className="flex gap-1 overflow-x-auto px-3 pb-3">
             {visible.map((t) => {
@@ -161,7 +180,7 @@ function App() {
                     )}
                   >
                     <Icon className="h-4 w-4" />
-                    {t.label}
+                    {tr(lang, NAV_TAB[t.id])}
                   </button>
                 </Tip>
               )
@@ -173,7 +192,7 @@ function App() {
           <div key={tab} className="animate-fade-up">
             <div className="mb-6 flex items-end justify-between gap-4">
               <div>
-                <h1 className="text-xl font-bold tracking-tight text-slate-900">{active.label}</h1>
+                <h1 className="text-xl font-bold tracking-tight text-slate-900">{tr(lang, NAV_TAB[active.id])}</h1>
                 <p className="mt-0.5 text-sm text-slate-500">{active.sub}</p>
               </div>
               <Tip label="The Trust Engine and security timeline refresh live. The pulsing dot means it's polling updates from the backend.">
@@ -182,7 +201,7 @@ function App() {
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
                     <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-600" />
                   </span>
-                  <span className="text-xs text-slate-500">Live</span>
+                  <span className="text-xs text-slate-500">{tr(lang, 'live')}</span>
                 </span>
               </Tip>
             </div>

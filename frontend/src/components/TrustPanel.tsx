@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { getCurrentUser, api, type TrustState } from '../api'
-import { Badge, Panel, decisionTone, cn } from './ui'
+import { Badge, Panel, decisionTone, cn, SpeakerButton } from './ui'
 import { ShieldIcon } from './icons'
+import { useLang, tr } from '../i18n'
 
 const COMPONENTS = [
   { key: 'identity', label: 'Identity', weight: 30, desc: 'credential validity & auth failures' },
@@ -11,16 +12,10 @@ const COMPONENTS = [
   { key: 'history', label: 'History', weight: 15, desc: 'recent anomaly decisions' },
 ]
 
-const DECISION_META: Record<string, { text: string; dot: string }> = {
-  ALLOW: { text: 'Access granted — identity and context look healthy.', dot: 'bg-emerald-500' },
-  STEP_UP: { text: 'Stepped up — extra verification is required right now.', dot: 'bg-amber-500' },
-  RESTRICTED: { text: 'Restricted — access limited to read-only/limited scope.', dot: 'bg-violet-500' },
-  DENY: { text: 'Denied — risky or invalid signals in this context.', dot: 'bg-rose-500' },
-}
-
 export default function TrustPanel() {
   const user = getCurrentUser()
   const [state, setState] = useState<TrustState | null>(null)
+  const lang = useLang()
 
   useEffect(() => {
     if (!user) return
@@ -51,6 +46,8 @@ export default function TrustPanel() {
   const color = score >= 70 ? '#10b981' : score >= 40 ? '#f59e0b' : '#f43f5e'
   const R = 52
   const CIRC = 2 * Math.PI * R
+  const decisionLine = tr(lang, `decHit_${state.decision}`)
+  const theory = tr(lang, `dec_${state.decision}`)
 
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -90,8 +87,13 @@ export default function TrustPanel() {
           </div>
 
           <p className="mt-4 max-w-[240px] text-center text-xs leading-relaxed text-slate-600">
-            {DECISION_META[state.decision]?.text ?? 'Explainable, weighted trust score.'}
+            {decisionLine}
           </p>
+
+          <div className="mt-3 flex items-center gap-2">
+            <span className="text-[11px] font-semibold text-slate-400">{theory}</span>
+            <SpeakerButton text={`${theory}. ${decisionLine}`} tone={tone} />
+          </div>
 
           {state.ml_signal !== null && (
             <div className="mt-4 w-full rounded-xl border border-ink-700 bg-slate-50 px-3 py-2">
@@ -167,9 +169,12 @@ export default function TrustPanel() {
         >
           <div className="flex flex-wrap gap-2">
             {(state.reasons.length ? state.reasons : ['OK']).map((r) => (
-              <Badge key={r} tone={r.includes('REVOKED') || r.includes('EXCESSIVE') ? 'red' : r === 'OK' || r.includes('KNOWN') ? 'green' : 'amber'}>
-                {r}
-              </Badge>
+              <span key={r} className="flex items-center gap-1.5">
+                <Badge tone={r.includes('REVOKED') || r.includes('EXCESSIVE') ? 'red' : r === 'OK' || r.includes('KNOWN') ? 'green' : 'amber'}>
+                  {r}
+                </Badge>
+                <span className="text-[11px] text-slate-500">{tr(lang, `r_${r}`)}</span>
+              </span>
             ))}
           </div>
           {state.reasons.length === 0 && <p className="mt-2 text-xs text-slate-500">No anomalies — the policy pipeline is running clean.</p>}

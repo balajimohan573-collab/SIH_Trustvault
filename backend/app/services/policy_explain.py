@@ -56,6 +56,7 @@ _REASON_HUMAN = {
     "TIME_OUTSIDE": "This asset is restricted to a time window that is not currently open.",
     "CONTEXT_REQUIRED": "This policy requires additional context that was not provided.",
     "RESTRICTED_ACCESS": "Access has been limited to read-only / restricted scope.",
+    "DURESS_ACTIVE": "Access is frozen because your duress signal is active.",
 }
 
 

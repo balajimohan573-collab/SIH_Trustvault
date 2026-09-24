@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { api, authApi, setAuth } from '../api'
 import { BadgeCheckIcon, ChevronRightIcon, FingerprintIcon, LockIcon, ShieldIcon } from './icons'
 import { BtnPrimary, Field, Input, Notice, Spinner, cn, Tip } from './ui'
+import LanguageSwitcher from './LanguageSwitcher'
+import { useLang, tr } from '../i18n'
 
 const DEMO_ACCOUNTS = [
   { email: 'issuer@trustvault.example', label: 'Issuer', desc: 'An institution that issues credentials', dot: 'bg-sky-500', tip: 'Sign in as Issuer to issue, verify and revoke hash-only credentials.' },
@@ -21,6 +23,7 @@ export default function Login({ onLogin }: { onLogin: (user: any) => void }) {
   const [email, setEmail] = useState(DEMO_ACCOUNTS[1].email)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const lang = useLang()
 
   async function signIn(mail: string) {
     setBusy(true)
@@ -40,7 +43,11 @@ export default function Login({ onLogin }: { onLogin: (user: any) => void }) {
 
   return (
     <div className="relative min-h-screen px-4 py-10 sm:px-6">
-      <div className="mx-auto grid w-full max-w-5xl overflow-hidden rounded-3xl border border-ink-700 bg-white shadow-xl shadow-slate-200/70 animate-fade-up lg:grid-cols-[1.05fr_1fr]">
+      <div className="mx-auto max-w-5xl">
+        <div className="flex justify-end pb-3">
+          <LanguageSwitcher />
+        </div>
+        <div className="grid w-full overflow-hidden rounded-3xl border border-ink-700 bg-white shadow-xl shadow-slate-200/70 animate-fade-up lg:grid-cols-[1.05fr_1fr]">
         <div className="relative hidden flex-col justify-between bg-gradient-to-br from-rose-50 via-white to-white p-10 lg:flex">
           <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-rose-500/10 blur-3xl" />
           <div className="pointer-events-none absolute -bottom-20 -left-10 h-56 w-56 rounded-full bg-brand-500/10 blur-3xl" />
@@ -51,7 +58,7 @@ export default function Login({ onLogin }: { onLogin: (user: any) => void }) {
             </div>
             <div>
               <p className="text-lg font-bold tracking-tight text-slate-900">TrustVault</p>
-              <p className="text-xs text-slate-500">Verify once. Control access everywhere.</p>
+              <p className="text-xs text-slate-500">{tr(lang, 'tagline')}</p>
             </div>
           </div>
 
@@ -93,7 +100,7 @@ export default function Login({ onLogin }: { onLogin: (user: any) => void }) {
               </div>
               <div>
                 <p className="text-base font-bold tracking-tight text-slate-900">TrustVault</p>
-                <p className="text-[11px] text-slate-500">Verify once. Control access everywhere.</p>
+                <p className="text-[11px] text-slate-500">{tr(lang, 'tagline')}</p>
               </div>
             </div>
           </div>
@@ -161,6 +168,7 @@ export default function Login({ onLogin }: { onLogin: (user: any) => void }) {
               {error}
             </Notice>
           )}
+        </div>
         </div>
       </div>
     </div>

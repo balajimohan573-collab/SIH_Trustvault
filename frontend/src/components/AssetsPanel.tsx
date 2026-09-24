@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, getCurrentUser, type Asset } from '../api'
-import { Badge, EmptyState, Field, Notice, Panel, BtnGhost, BtnPrimary, Input, Select, Spinner, cn, decisionTone, Tip } from './ui'
+import { Badge, EmptyState, Field, Notice, Panel, BtnGhost, BtnPrimary, Input, Select, Spinner, cn, decisionTone, Tip, SpeakerButton } from './ui'
 import { ArrowDownIcon, FileTextIcon, FolderLockIcon, LockIcon, UploadIcon, GiveIcon, ShieldAlertIcon } from './icons'
+import { useLang, tr } from '../i18n'
 
 function PipelineResult({ body }: { body: any }) {
   const d = body?.detail
+  const lang = useLang()
   if (!d) return null
   const tone = decisionTone(d.decision ?? '')
   const banner = {
@@ -14,14 +16,25 @@ function PipelineResult({ body }: { body: any }) {
     red: 'border-rose-200 bg-rose-50 text-rose-800',
     slate: 'border-slate-300 bg-slate-50 text-slate-700',
   }[tone]
+  const theory = tr(lang, `dec_${d.decision}`)
+  const human = d.human ? tr(lang, `decHit_${d.decision}`) : undefined
+  const reasonText = Array.isArray(d.reasons_human)
+    ? d.reasons_human.map((r: any) => r.code).join(', ')
+    : ''
   return (
     <div className={cn('mt-5 rounded-xl border p-4', banner)}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold uppercase tracking-widest text-current/70">Access pipeline</span>
-        <Badge tone={tone}>{d.decision}</Badge>
+        <Badge tone={tone}>{theory}</Badge>
         <span className="ml-auto font-mono text-xs opacity-70">trust {d.trust_score}</span>
       </div>
-      {d.human && <p className="mt-2 text-xs font-medium">{d.human}</p>}
+      {human && <p className="mt-2 text-xs font-medium">{human}</p>}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <SpeakerButton text={`${theory}. ${human ?? ''} ${reasonText}`} tone={tone} />
+        {Array.isArray(d.reasons_human) && d.reasons_human.length > 0 && (
+          <span className="text-[10px] opacity-60">{tr(lang, 'speak_button')}: reasons {reasonText}</span>
+        )}
+      </div>
       {d.scope && <p className="mt-1 text-[11px] opacity-80">Scope: {d.scope}</p>}
       {d.next_action && (
         <p className="mt-2 rounded-lg border border-current/10 bg-white/50 px-2.5 py-1.5 text-[11px]">
@@ -33,7 +46,7 @@ function PipelineResult({ body }: { body: any }) {
           {d.reasons_human.map((r: any) => (
             <li key={r.code} className="flex items-start gap-2 text-[11px]">
               <code className="rounded border border-current/15 bg-white/50 px-1 py-px font-mono">{r.code}</code>
-              <span className="opacity-90">{r.human}</span>
+              <span className="opacity-90">{tr(lang, `r_${r.code}`)}</span>
             </li>
           ))}
         </ul>

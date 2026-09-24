@@ -1,0 +1,292 @@
+// Trilingual layer: English / हिंदी / தமிழ்.
+// Feeds every decision + reason + nav string shown to the user, and powers the
+// browser-native voice (Web Speech) so the interface works for low-literacy users.
+
+import { useEffect, useState } from 'react'
+
+export type Lang = 'en' | 'hi' | 'ta'
+
+export const LANGS: { id: Lang; label: string; short: string; tts: string }[] = [
+  { id: 'en', label: 'English', short: 'EN', tts: 'en-IN' },
+  { id: 'hi', label: 'हिंदी', short: 'हिं', tts: 'hi-IN' },
+  { id: 'ta', label: 'தமிழ்', short: 'த', tts: 'ta-IN' },
+]
+
+const STORE_KEY = 'trustvault.lang'
+
+const D: Record<string, Record<Lang, string>> = {
+  tagline: {
+    en: 'Verify once. Control access everywhere.',
+    hi: 'एक बार सत्यापित करें, हर जगह पहुँच नियंत्रित करें।',
+    ta: 'ஒருமுறை சரிபார்த்து, எல்லா இடங்களிலும் அணுகலைக் கட்டுப்படுத்துங்கள்।',
+  },
+  live: { en: 'Live', hi: 'लाइव', ta: 'நேரடி' },
+  signout_tip: {
+    en: 'Sign out of your current session (clears auth token and returns to login).',
+    hi: 'अपने सत्र से बाहर निकलें (लॉगिन टोकन हटाकर लॉगिन पेज पर लौटें)।',
+    ta: 'உங்கள் அமர்விலிருந்து வெளியேறவும் (நுழைவு டோக்கனை அழித்து உள்நுழைவுப் பக்கத்திற்கு திரும்பவும்).',
+  },
+
+  // Navigation
+  nav_dashboard: { en: 'Dashboard', hi: 'डैशबोर्ड', ta: 'டாஷ்போர்டு' },
+  nav_verify: { en: 'Verify QR', hi: 'QR सत्यापित करें', ta: 'QR சரிபார்க்கவும்' },
+  nav_trust: { en: 'Trust score', hi: 'विश्वास स्कोर', ta: 'நம்பிக்கை மதிப்பெண்' },
+  nav_timeline: { en: 'Security timeline', hi: 'सुरक्षा समयरेखा', ta: 'பாதுகாப்பு காலவரிசை' },
+  nav_credentials: { en: 'Credentials', hi: 'प्रमाणपत्र', ta: 'சான்றிதழ்கள்' },
+  nav_assets: { en: 'Assets & policies', hi: 'दस्तावेज़ और नियम', ta: 'ஆவணங்கள் & விதிகள்' },
+  nav_access: { en: 'Access requests', hi: 'अनुमति अनुरोध', ta: 'அனுமதி கோரிக்கைகள்' },
+  nav_audit: { en: 'Audit trail', hi: 'ऑडिट ट्रेल', ta: 'தணிக்கைத் தடம்' },
+
+  // Decisions
+  dec_ALLOW: { en: 'Access allowed', hi: 'अनुमति दी गई', ta: 'அணுகல் அனுமதிக்கப்பட்டது' },
+  dec_STEP_UP: {
+    en: 'Step-up verification required',
+    hi: 'अतिरिक्त सत्यापन आवश्यक',
+    ta: 'கூடுதல் சரிபார்ப்பு தேவை',
+  },
+  dec_RESTRICTED: {
+    en: 'Access restricted',
+    hi: 'पहुंच प्रतिबंधित',
+    ta: 'அணுகல் கட்டுப்படுத்தப்பட்டது',
+  },
+  dec_DENY: { en: 'Access denied', hi: 'पहुंच अस्वीकृत', ta: 'அணுகல் மறுக்கப்பட்டது' },
+
+  decHit_ALLOW: {
+    en: 'Your request is safe. You may proceed.',
+    hi: 'आपका अनुरोध सुरक्षित है। आगे बढ़ सकते हैं।',
+    ta: 'உங்கள் கோரிக்கை பாதுகாப்பானது. தொடரலாம்.',
+  },
+  decHit_STEP_UP: {
+    en: 'One more verification is needed for your safety.',
+    hi: 'सुरक्षा के लिए एक बार और सत्यापन चाहिए।',
+    ta: 'பாதுகாப்பிற்காக மீண்டும் ஒருமுறை சரிபார்ப்பு தேவை.',
+  },
+  decHit_RESTRICTED: {
+    en: 'Access is limited to read-only for now.',
+    hi: 'अभी पहुँच केवल पढ़ने तक सीमित है।',
+    ta: 'இப்போது அணுகல் படிக்க மட்டுமே வரம்பிடப்பட்டுள்ளது.',
+  },
+  decHit_DENY: {
+    en: 'Access denied. The reason is shown below.',
+    hi: 'पहुंच अस्वीकृत। कारण नीचे दिया गया है।',
+    ta: 'அணுகல் மறுக்கப்பட்டது. காரணம் கீழே உள்ளது.',
+  },
+
+  // Reason codes (plain-language, low-literacy friendly)
+  r_OK_CREDENTIAL: {
+    en: 'Your identity certificate is valid.',
+    hi: 'आपका सत्यापन प्रमाणपत्र सही है।',
+    ta: 'உங்கள் சான்றிதழ் சரியாக உள்ளது.',
+  },
+  r_OK: { en: 'All checks passed.', hi: 'सभी जाँचें पास।', ta: 'அனைத்து சோதனைகளும் நிறைவேறின.' },
+  r_UNAUTHENTICATED: { en: 'You are not signed in.', hi: 'आप लॉगिन नहीं हैं।', ta: 'நீங்கள் உள்நுழையவில்லை.' },
+  r_NO_CREDENTIAL: {
+    en: 'No identity certificate found.',
+    hi: 'कोई सत्यापन प्रमाणपत्र नहीं मिला।',
+    ta: 'சான்றிதழ் எதுவும் இல்லை.',
+  },
+  r_CREDENTIAL_REVOKED: {
+    en: 'Your certificate has been cancelled.',
+    hi: 'आपका प्रमाणपत्र रद्द हो चुका है।',
+    ta: 'உங்கள் சான்றிதழ் ரத்து செய்யப்பட்டது.',
+  },
+  r_NEW_DEVICE: {
+    en: 'This request is from a new device.',
+    hi: 'यह नई डिवाइस से अनुरोध है।',
+    ta: 'இது புதிய சாதனத்திலிருந்து வரும் கோரிக்கை.',
+  },
+  r_DEVICE_REVOKED: {
+    en: 'This device has been cancelled.',
+    hi: 'यह डिवाइस रद्द हो चुकी है।',
+    ta: 'இந்த சாதனம் ரத்து செய்யப்பட்டது.',
+  },
+  r_KNOWN_DEVICE: {
+    en: 'This is a device we know.',
+    hi: 'यह आपकी जानी-पहचानी डिवाइस है।',
+    ta: 'இது உங்களுக்கு தெரிந்த சாதனம்.',
+  },
+  r_NO_DEVICE_TRACKING: {
+    en: 'No device information was available.',
+    hi: 'डिवाइस की जानकारी नहीं मिली।',
+    ta: 'சாதனத் தகவல் கிடைக்கவில்லை.',
+  },
+  r_REQUEST_VELOCITY_HIGH: {
+    en: 'Too many requests are coming in.',
+    hi: 'बहुत ज़्यादा अनुरोध हो रहे हैं।',
+    ta: 'மிக அதிக கோரிக்கைகள் வருகின்றன.',
+  },
+  r_REQUEST_VELOCITY_EXCESSIVE: {
+    en: 'Requests crossed a safe limit.',
+    hi: 'अनुरोध सीमा से अधिक हो गए।',
+    ta: 'கோரிக்கைகள் வரம்பை மீறின.',
+  },
+  r_UNUSUAL_HOUR: {
+    en: 'The request is at an unusual time.',
+    hi: 'असामान्य समय पर अनुरोध।',
+    ta: 'வழக்கத்திற்கு மாறான நேரத்தில் கோரிக்கை.',
+  },
+  r_ANOMALY_DETECTED: {
+    en: 'The AI watch saw something unusual.',
+    hi: 'एआई ने असामान्यता देखी।',
+    ta: 'AI அசாதாரண நிலையை கண்டறிந்தது.',
+  },
+  r_HISTORY_NORMAL: {
+    en: 'Account history looks normal.',
+    hi: 'खाता इतिहास सामान्य है।',
+    ta: 'கணக்கு வரலாறு இயல்பாக உள்ளது.',
+  },
+  r_HISTORY_ANOMALOUS: {
+    en: 'Recent activity looks unusual.',
+    hi: 'हाल में असामान्य गतिविधि मिली।',
+    ta: 'சமீபத்தில் அசாதாரண செயல்பாடு.',
+  },
+  r_NO_POLICY_FOR_ROLE: {
+    en: 'There is no permission rule for this task.',
+    hi: 'इस कार्य के लिए अनुमति नियम नहीं है।',
+    ta: 'இந்தப் பணிக்கு அனுமதி விதி இல்லை.',
+  },
+  r_WRONG_PURPOSE: {
+    en: 'The stated reason (purpose) is not allowed.',
+    hi: 'अनुमति का कारण (उद्देश्य) गलत है।',
+    ta: 'அனுமதியின் நோக்கம் தவறானது.',
+  },
+  r_NO_VALID_GRANT: {
+    en: 'There is no active permission.',
+    hi: 'कोई सक्रिय अनुमति नहीं है।',
+    ta: 'செயலில் அனுமதி இல்லை.',
+  },
+  r_GRANT_EXPIRED: {
+    en: 'The permission time has ended.',
+    hi: 'अनुमति की अवधि समाप्त हो गई।',
+    ta: 'அனுமதி காலம் முடிந்தது.',
+  },
+  r_ADMIN_OVERRIDE: {
+    en: 'An administrator gave special permission.',
+    hi: 'प्रशासक ने विशेष अनुमति दी।',
+    ta: 'நிர்வாகி சிறப்பு அனுமதி வழங்கினார்.',
+  },
+  r_NON_ADMIN_OVERRIDE_ATTEMPT: {
+    en: 'Special access was tried without permission.',
+    hi: 'बिना अनुमति के विशेष पहुँच की कोशिश।',
+    ta: 'அனுமதியின்றி சிறப்பு அணுகல் முயற்சி.',
+  },
+  r_TRUST_TOO_LOW: {
+    en: 'The trust score is too low.',
+    hi: 'विश्वास स्कोर कम है।',
+    ta: 'நம்பிக்கை மதிப்பெண் குறைவு.',
+  },
+  r_LOCATION_MISMATCH: {
+    en: 'Your location is not right for this document.',
+    hi: 'स्थान इस दस्तावेज़ के लिए सही नहीं है।',
+    ta: 'இருப்பிடம் இந்த ஆவணத்திற்கு சரியாக இல்லை.',
+  },
+  r_LOCATION_MISSING: {
+    en: 'Location information was not given.',
+    hi: 'स्थान की जानकारी नहीं दी गई।',
+    ta: 'இருப்பிடத் தகவல் அளிக்கப்படவில்லை.',
+  },
+  r_TIME_OUTSIDE: {
+    en: 'This is not permission time right now.',
+    hi: 'अभी अनुमति का समय नहीं है।',
+    ta: 'இப்போது அனுமதி நேரம் இல்லை.',
+  },
+  r_CONTEXT_REQUIRED: {
+    en: 'More information is needed.',
+    hi: 'अतिरिक्त जानकारी ज़रूरी है।',
+    ta: 'கூடுதல் தகவல் தேவை.',
+  },
+  r_RESTRICTED_ACCESS: {
+    en: 'Access is limited to read-only.',
+    hi: 'पहुँच केवल पढ़ने तक सीमित।',
+    ta: 'அணுகல் படிப்பதற்கு மட்டுமே.',
+  },
+  r_DURESS_ACTIVE: {
+    en: 'Access is frozen for safety reasons.',
+    hi: 'सुरक्षा कारणों से पहुँच रोकी गई।',
+    ta: 'பாதுகாப்பு காரணங்களால் அணுகல் நிறுத்தப்பட்டது.',
+  },
+
+  // Verify screen
+  verify_title: { en: 'Verify a credential QR', hi: 'प्रमाणपत्र QR सत्यापित करें', ta: 'சான்றிதழ் QR சரிபார்க்கவும்' },
+  verify_valid: { en: 'VALID', hi: 'सही', ta: 'சரியானது' },
+  verify_invalid: { en: 'INVALID', hi: 'गलत', ta: 'தவறானது' },
+  verify_none: { en: 'No verification yet', hi: 'अभी कोई सत्यापन नहीं', ta: 'இன்னும் சரிபார்ப்பு இல்லை' },
+  verify_btn: { en: 'Verify credential', hi: 'प्रमाणपत्र सत्यापित करें', ta: 'சான்றிதழை சரிபார்க்கவும்' },
+  verify_btn_busy: { en: 'Verifying…', hi: 'सत्यापन हो रहा है…', ta: 'சரிபார்க்கிறது…' },
+  verify_registered: {
+    en: 'Registered — standing as a known credential.',
+    hi: 'पंजीकृत — जानी-मानी प्रमाणपत्र है।',
+    ta: 'பதிவு செய்யப்பட்டது — அறியப்பட்ட சான்றிதழ்.',
+  },
+  verify_ok: { en: 'Active — available for use.', hi: 'सक्रिय — उपयोग के लिए तैयार।', ta: 'செயலில் — பயன்படுத்தத் தயார்.' },
+  verify_revoked: { en: 'Revoked — no longer usable.', hi: 'रद्द — अब उपयोग नहीं हो सकता।', ta: 'ரத்து — இனி பயன்படுத்த முடியாது.' },
+  verify_invalid_token: {
+    en: 'The token is missing, tampered with, or expired. The document they claim does not match.',
+    hi: 'टोकन गायब, बदला हुआ या समाप्त है।',
+    ta: 'டோக்கன் இல்லை, மாற்றப்பட்டது அல்லது காலாவதியானது.',
+  },
+  verify_result_title: { en: 'Verification result', hi: 'सत्यापन परिणाम', ta: 'சரிபார்ப்பு முடிவு' },
+  verify_result_sub: {
+    en: 'Signature + short expiry = forward proof; status = live registry state',
+    hi: 'हस्ताक्षर + छोटी अवधि = सबूत; स्थिति = वास्तविक पंजीकरण स्थिति',
+    ta: 'கையொப்பம் + குறுகிய காலம் = சான்று; நிலை = நேரடி பதிவு நிலை',
+  },
+  verify_paste: {
+    en: 'Paste the short-lived token the holder generated',
+    hi: 'होल्डर द्वारा बनाया गया अल्पकालिक टोकन डालें',
+    ta: 'உரிமையாளர் உருவாக்கிய குறுகியகால டோக்கனை ஒட்டவும்',
+  },
+  speak_button: { en: 'Listen', hi: 'सुनें', ta: 'கேளுங்கள்' },
+}
+
+export function tr(lang: Lang, key: string): string {
+  return D[key]?.[lang] ?? D[key]?.en ?? key
+}
+
+export function getStoredLang(): Lang {
+  try {
+    const v = localStorage.getItem(STORE_KEY)
+    return v === 'hi' || v === 'ta' ? v : 'en'
+  } catch {
+    return 'en'
+  }
+}
+
+const LANG_EVENT = 'trustvault:lang'
+
+export function storeLang(lang: Lang) {
+  try {
+    localStorage.setItem(STORE_KEY, lang)
+  } catch {
+    /* private mode */
+  }
+  window.dispatchEvent(new CustomEvent(LANG_EVENT, { detail: lang }))
+}
+
+export function useLang(): Lang {
+  const [lang, setLang] = useState<Lang>(getStoredLang())
+  useEffect(() => {
+    const onLang = (e: Event) => setLang((e as CustomEvent<Lang>).detail ?? getStoredLang())
+    window.addEventListener(LANG_EVENT, onLang)
+    return () => window.removeEventListener(LANG_EVENT, onLang)
+  }, [])
+  return lang
+}
+
+export function speak(text: string, lang: Lang) {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+  try {
+    window.speechSynthesis.cancel()
+    const u = new SpeechSynthesisUtterance(text)
+    u.lang = LANGS.find((l) => l.id === lang)?.tts ?? 'en-IN'
+    u.rate = 0.92
+    const voices = window.speechSynthesis.getVoices()
+    const voice = voices.find(
+      (v) => v.lang.replace('_', '-').toLowerCase() === u.lang.toLowerCase(),
+    )
+    if (voice) u.voice = voice
+    window.speechSynthesis.speak(u)
+  } catch {
+    /* voice unsupported */
+  }
+}
