@@ -35,13 +35,14 @@ export default function AuditPanel() {
 
   return (
     <Panel
-      title="Audit trail"
-      subtitle="Full history of high-value events with on-chain anchor status"
+      title="History"
+      subtitle="A permanent record of everything decided, permanently sealed"
       icon={<FileTextIcon className="h-5 w-5" />}
+      help="Every decision here is sealed with a proof that cannot be changed afterwards. It is the official record if questions ever come up."
     >
       <div className="flex flex-col gap-2 sm:flex-row">
         <Select value={selected} onChange={(e) => setSelected(e.target.value)} className="sm:max-w-xs">
-          <option value="">Select asset…</option>
+          <option value="">Select document…</option>
           {assets.map((a) => (
             <option key={a.id} value={a.id}>
               {a.name} ({a.id.slice(0, 8)}…)
@@ -49,7 +50,7 @@ export default function AuditPanel() {
           ))}
         </Select>
         <BtnPrimary onClick={show} disabled={!selected}>
-          Show audit
+          Show history
         </BtnPrimary>
       </div>
 
@@ -57,8 +58,8 @@ export default function AuditPanel() {
         <div className="mt-5">
           <EmptyState
             icon={<FileTextIcon className="h-5 w-5" />}
-            title="No logged events"
-            hint="No high-value events have been recorded for this asset yet."
+            title="Nothing recorded yet"
+            hint="Decisions for this document will appear here the moment they happen."
           />
         </div>
       )}
@@ -90,7 +91,7 @@ export default function AuditPanel() {
                 </span>
                 {r.decision && <Badge tone={tone}>{r.decision}</Badge>}
                 {r.trust_score !== null && (
-                  <span className="font-mono text-[11px] text-slate-500">trust {r.trust_score}</span>
+                  <span className="font-mono text-[11px] text-slate-500">security {r.trust_score}</span>
                 )}
                 <span className="ml-auto font-mono text-[10px] text-slate-500">
                   {new Date(r.created_at).toLocaleString()}
@@ -99,19 +100,22 @@ export default function AuditPanel() {
 
               {r.anchor && (
                 <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                  <Badge tone={r.anchor.status === 'anchored' ? 'green' : 'amber'} dot>
-                    {r.anchor.status}
-                  </Badge>
-                  <span className="font-mono text-[10px] text-slate-500">
-                    {r.anchor.chain} · {r.anchor.tx_hash}
+                  <span className="text-[11px] text-slate-600">
+                    {r.anchor.status === 'anchored' ? 'Permanently sealed ✓' : 'Sealing pending…'}
                   </span>
+                  <details className="group">
+                    <summary className="cursor-pointer font-mono text-[10px] text-slate-400 transition hover:text-slate-600">
+                      proof {r.anchor.tx_hash.slice(0, 14)}… ({r.anchor.chain})
+                    </summary>
+                    <p className="mt-1 max-w-md break-all font-mono text-[10px] text-slate-400">{r.anchor.tx_hash}</p>
+                  </details>
                 </div>
               )}
 
               {Object.keys(r.risk_signals ?? {}).length > 0 && (
                 <details className="mt-2 group">
                   <summary className="cursor-pointer text-[11px] text-slate-500 transition hover:text-slate-700">
-                    Risk signals
+                    Details
                   </summary>
                   <pre className="mt-2 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-2.5 font-mono text-[10px] leading-relaxed text-slate-500">
                     {JSON.stringify(r.risk_signals, null, 2)}

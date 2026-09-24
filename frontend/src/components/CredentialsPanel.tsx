@@ -23,7 +23,7 @@ export default function CredentialsPanel({ userRole }: { userRole: string }) {
     try {
       const r = await qrApi.generate(c.id, 'verification', 5)
       setQrUrl(r.qr_url)
-      setMsg(`QR token expires in 5 minutes. Scan with the Verify tab.`)
+      setMsg(`QR ready — it proves this certificate for 5 minutes.`)
     } catch (e: any) {
       setErr(`QR failed: ${e.message ?? 'unknown error'}`)
     }
@@ -44,7 +44,7 @@ export default function CredentialsPanel({ userRole }: { userRole: string }) {
         document = { freeform: claim }
       }
       await api.post('/credentials/issue', { holder_email: holderEmail, type, document })
-      setMsg(`Credential issued to ${holderEmail}`)
+      setMsg(`Certificate added for ${holderEmail}`)
       await refresh()
     } catch (e: any) {
       setErr(`Issue failed: ${e.message ?? 'unknown error'}`)
@@ -52,10 +52,10 @@ export default function CredentialsPanel({ userRole }: { userRole: string }) {
   }
 
   async function revoke(id: string) {
-    if (!confirm('Revoke this credential? It will fail all future verifications.')) return
+    if (!confirm('Cancel this certificate? Everything that checks it will then fail.')) return
     try {
       await api.post(`/credentials/${id}/revoke`, { reason: 'demo revoke' })
-      setMsg('Credential revoked — verifications will now fail.')
+      setMsg('Certificate cancelled — checks will now show it as no longer valid.')
     } catch {
       /* ignore */
     }
@@ -66,22 +66,23 @@ export default function CredentialsPanel({ userRole }: { userRole: string }) {
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
       {isIssuer && (
         <Panel
-          title="Issue credential"
-          subtitle="Issuer verifies identity and issues a hash-only credential"
+          title="Add a certificate"
+          subtitle="A school, university or office adds it — only a safe fingerprint is kept"
           icon={<BadgeCheckIcon className="h-5 w-5" />}
+          help="You only record a safe fingerprint of the certificate, never its contents. That keeps the original private while still making it provable."
         >
           <div className="space-y-3.5">
-            <Field label="Holder email" hint="who receives the credential">
-              <Input value={holderEmail} onChange={(e) => setHolderEmail(e.target.value)} placeholder="holder email" />
+            <Field label="For" hint="who gets the certificate">
+              <Input value={holderEmail} onChange={(e) => setHolderEmail(e.target.value)} placeholder="recipient email" />
             </Field>
-            <Field label="Credential type" hint="e.g. education_certificate">
-              <Input value={type} onChange={(e) => setType(e.target.value)} placeholder="credential type" />
+            <Field label="Certificate type" hint="e.g. degree, marks card, licence">
+              <Input value={type} onChange={(e) => setType(e.target.value)} placeholder="certificate type" />
             </Field>
-            <Field label="Claim document" hint="JSON — hashed, never stored raw">
+            <Field label="Details to certify" hint="e.g. degree, university, year">
               <Textarea rows={4} value={claim} onChange={(e) => setClaim(e.target.value)} className="font-mono text-xs" />
             </Field>
             <BtnPrimary className="w-full" onClick={issue}>
-              Issue credential
+              Add certificate
             </BtnPrimary>
             {msg && (
               <Notice tone="green">
@@ -98,16 +99,16 @@ export default function CredentialsPanel({ userRole }: { userRole: string }) {
       )}
 
       <Panel
-        title={isIssuer ? 'Issued credentials' : 'My credentials'}
-        subtitle="Only SHA-256 hashes are stored — never the raw document"
+        title={isIssuer ? 'Issued certificates' : 'My certificates'}
+        subtitle="Only a safe fingerprint is stored — never the original"
         icon={<ShieldIcon className="h-5 w-5" />}
         className={isIssuer ? '' : 'lg:col-span-2'}
       >
         {creds.length === 0 ? (
           <EmptyState
             icon={<ShieldIcon className="h-5 w-5" />}
-            title="No credentials yet"
-            hint="Issued credentials appear here with their on-chain status hash, ready for verification."
+            title="No certificates yet"
+            hint="Certificates appear here with their safety status, ready to be shared as a short-lived QR."
           />
         ) : (
           <div className="space-y-3">
@@ -127,9 +128,9 @@ export default function CredentialsPanel({ userRole }: { userRole: string }) {
                         {c.status}
                       </Badge>
                     </div>
-                    <p className="mt-1.5 font-mono text-[10px] text-slate-500">issuer {c.issuer_id.slice(0, 12)}…</p>
+                    <p className="mt-1.5 font-mono text-[10px] text-slate-500">issued by {c.issuer_id.slice(0, 12)}…</p>
                     <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 font-mono text-[10px] text-slate-500">
-                      <span title={c.hash}>sha256 {c.hash.slice(0, 24)}…</span>
+                      <span title={c.hash}>fingerprint {c.hash.slice(0, 24)}…</span>
                       <span title={c.id}>id {c.id.slice(0, 10)}…</span>
                       <span>issued {new Date(c.issued_at).toLocaleDateString()}</span>
                     </div>
@@ -139,12 +140,12 @@ export default function CredentialsPanel({ userRole }: { userRole: string }) {
                   {!isIssuer && c.status === 'active' && (
                     <BtnGhost className="!px-3 !py-1.5 text-xs" onClick={() => makeQr(c)}>
                       <QrCodeIcon className="h-3.5 w-3.5" />
-                      QR
+                      Share proof
                     </BtnGhost>
                   )}
                   {isIssuer && c.status === 'active' && (
                     <BtnDanger className="!px-3 !py-1.5 text-xs" onClick={() => revoke(c.id)}>
-                      Revoke
+                      Cancel
                     </BtnDanger>
                   )}
                 </div>
@@ -157,7 +158,7 @@ export default function CredentialsPanel({ userRole }: { userRole: string }) {
             <span className="flex flex-wrap items-center gap-2">
               <QrCodeIcon className="h-3.5 w-3.5 shrink-0" />
               Open the <b className="font-mono">{qrUrl}</b> link (or paste it into the Verify tab) to prove the
-              credential. The token self-expires after 5 minutes.
+              certificate. It only works for 5 minutes.
               <button
                 onClick={() => {
                   navigator.clipboard?.writeText(qrUrl)

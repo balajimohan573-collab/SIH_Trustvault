@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { api, type SecurityEvent } from '../api'
 import { Badge, EmptyState, Panel, decisionTone, cn } from './ui'
 import { ActivityIcon, CheckIcon, XIcon, AlertIcon, InfoIcon } from './icons'
+import { useLang, tr } from '../i18n'
 
 export default function TimelinePanel() {
   const [events, setEvents] = useState<SecurityEvent[]>([])
+  const lang = useLang()
 
   useEffect(() => {
     const t = setInterval(async () => {
@@ -19,20 +21,20 @@ export default function TimelinePanel() {
 
   return (
     <Panel
-      title="Security event timeline"
-      subtitle="Attack visible → trust score drops → STEP_UP / RESTRICTED / DENY triggered"
+      title={tr(lang, 'nav_timeline')}
+      subtitle="What happened to your account, as it happens"
       icon={<ActivityIcon className="h-5 w-5" />}
       actions={
         <Badge tone="green" dot className="animate-pulse">
-          Live
+          {tr(lang, 'live')}
         </Badge>
       }
     >
       {events.length === 0 ? (
         <EmptyState
           icon={<ActivityIcon className="h-5 w-5" />}
-          title="No security events yet"
-          hint="Events stream in here as the Trust Engine evaluates requests — run the attack demo to see the score collapse in real time."
+          title="Nothing to show yet"
+          hint="Events land here as things happen — approvals, blocks, and anything unusual. Run a demo to see it fill up."
         />
       ) : (
         <ol className="relative space-y-4 border-l border-slate-200 pl-6">
@@ -40,6 +42,7 @@ export default function TimelinePanel() {
             const tone = decisionTone(e.decision ?? '')
             const Icon = e.decision === 'ALLOW' ? CheckIcon : e.decision === 'RESTRICTED' ? InfoIcon : e.decision === 'STEP_UP' ? AlertIcon : XIcon
             const nodeColor = e.decision === 'ALLOW' ? 'bg-emerald-500' : e.decision === 'STEP_UP' ? 'bg-amber-500' : e.decision === 'RESTRICTED' ? 'bg-violet-500' : 'bg-rose-500'
+            const decLabel = e.decision ? tr(lang, `dec_${e.decision}`) : null
             return (
               <li key={e.id} className="relative">
                 <span
@@ -55,10 +58,10 @@ export default function TimelinePanel() {
                     <span className="rounded-md border border-brand-200 bg-brand-50 px-1.5 py-0.5 font-mono text-[11px] text-brand-700">
                       {e.event_type}
                     </span>
-                    {e.decision && <Badge tone={tone}>{e.decision}</Badge>}
+                    {decLabel && <Badge tone={tone}>{decLabel}</Badge>}
                     {e.trust_score !== null && (
                       <span className={cn('font-mono text-[11px]', e.trust_score >= 70 ? 'text-slate-500' : e.trust_score >= 40 ? 'text-amber-600' : 'text-rose-600')}>
-                        trust {e.trust_score}
+                        security {e.trust_score}
                       </span>
                     )}
                     <span className="ml-auto font-mono text-[10px] text-slate-400">
@@ -68,7 +71,7 @@ export default function TimelinePanel() {
                   {Object.keys(e.risk_signals ?? {}).length > 0 && (
                     <details className="mt-2 group">
                       <summary className="cursor-pointer text-[11px] text-slate-500 transition hover:text-slate-700">
-                        Risk signals
+                        Technical details
                       </summary>
                       <pre className="mt-2 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-2.5 font-mono text-[10px] leading-relaxed text-slate-500">
                         {JSON.stringify(e.risk_signals, null, 2)}

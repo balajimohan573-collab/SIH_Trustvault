@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { ReactElement, SVGProps } from 'react'
 import { setAuth, getCurrentUser } from './api'
 import Login from './components/Login'
+import HomePanel from './components/HomePanel'
 import DashboardPanel from './components/DashboardPanel'
 import VerifyPanel from './components/VerifyPanel'
 import TrustPanel from './components/TrustPanel'
@@ -42,14 +43,14 @@ const NAV_TAB: Record<Tab, string> = {
 }
 
 const NAV: { id: Tab; label: string; sub: string; icon: IconCmp; roles: string[]; tip: string }[] = [
-  { id: 'dashboard', label: 'Dashboard', sub: 'Role-scoped overview + technical view', icon: DashboardIcon, roles: [], tip: 'Role-scoped summary: identity, credentials, assets/NFT custody, pending requests, security posture, quick actions (offline sync, device recovery, duress) and a Technical view for admins/auditors.' },
-  { id: 'verify', label: 'Verify QR', sub: 'Short-lived credential verification', icon: QrCodeIcon, roles: [], tip: 'Verify a credential QR: paste the signed token the holder generated. The HMAC signature proves it came from TrustVault, the 5-minute expiry bounds it, and only minimal claims are disclosed. Open a shared link like /#/verify?token=... to auto-fill.' },
-  { id: 'trust', label: 'Trust score', sub: 'Live Trust Engine state for your identity', icon: ShieldIcon, roles: [], tip: 'Shows your live 0-100 Trust Score, how it is calculated (Identity/Device/Behaviour/Context/History), decision (ALLOW/STEP_UP/RESTRICTED/DENY), and reason codes explaining what the engine sees right now.' },
-  { id: 'timeline', label: 'Security timeline', sub: 'Security events and risk signals in real time', icon: ActivityIcon, roles: [], tip: "Streams security events in real time. When an attack happens, the timeline shows when trust drops, what triggered STEP_UP/RESTRICTED/DENY, and each event's risk signals." },
-  { id: 'credentials', label: 'Credentials', sub: 'Hash-anchored verifiable credentials', icon: BadgeCheckIcon, roles: [], tip: 'Hash-only credentials issued once by an institution. Issuers can issue/revoke; holders see what is active/revoked and generate a short-lived QR to prove it. The blockchain only stores SHA-256 hashes, never raw documents.' },
-  { id: 'assets', label: 'Assets & policies', sub: 'Encrypted documents, NFT custody, ABAC policies', icon: FolderLockIcon, roles: ['holder', 'issuer', 'admin'], tip: 'Upload a document → AES-256-GCM encrypted, SHA-256 hashed, optional ERC-721 NFT minted. Define ABAC policies (role + purpose + min trust + optional location/time). Transfer NFT ownership. Evaluate runs the 4-way decision pipeline with human explanations.' },
-  { id: 'access', label: 'Access requests', sub: 'Purpose- and time-bound access grants', icon: KeyIcon, roles: ['holder', 'issuer', 'verifier', 'admin'], tip: 'Verifiers request access for a stated purpose. Holders approve with a time window (minutes) to create a purpose-bound, time-bound grant. Denials are recorded and visible.' },
-  { id: 'audit', label: 'Audit trail', sub: 'Immutable on-chain audit anchors', icon: FileTextIcon, roles: ['holder', 'issuer', 'admin'], tip: 'High-value events are logged and anchored. Shows anchor status (pending/anchored), chain and tx hash. If configured with Sepolia RPC+key, anchors become real on-chain transactions.' },
+  { id: 'dashboard', label: 'Home', sub: 'Everything you need, in simple words', icon: DashboardIcon, roles: [], tip: 'Your personal overview: security status, your certificates and documents, and one-tap actions — no technical knowledge required.' },
+  { id: 'verify', label: 'Verify', sub: 'Check a shared proof is real', icon: QrCodeIcon, roles: [], tip: 'Paste a proof link someone sent you. TrustVault instantly confirms it is genuine, not expired, and has not been cancelled.' },
+  { id: 'trust', label: 'Security check', sub: 'How healthy your account is, right now', icon: ShieldIcon, roles: [], tip: 'A single 0-100 health score. Over 70 means everything looks good; lower scores explain what needs attention in plain language.' },
+  { id: 'timeline', label: 'Activity', sub: 'Security events as they happen', icon: ActivityIcon, roles: [], tip: 'A simple timeline of what happened to your account and when — approvals, blocks, and anything unusual.' },
+  { id: 'credentials', label: 'My certificates', sub: 'Certificates issued to you, ready to share', icon: BadgeCheckIcon, roles: [], tip: 'All certificates issued to you by schools, universities or offices. Create a short-lived proof link to show an employer it is real. Only a safe fingerprint is stored — never your private details.' },
+  { id: 'assets', label: 'My documents', sub: 'Store documents safely and control who views them', icon: FolderLockIcon, roles: ['holder', 'issuer', 'admin'], tip: 'Upload any important document. It is locked and stored safely for you. You choose who is allowed to view it, when, and from where.' },
+  { id: 'access', label: 'Requests', sub: 'Who is asking to see your documents', icon: KeyIcon, roles: ['holder', 'issuer', 'verifier', 'admin'], tip: 'When someone asks to see one of your documents, it appears here. Allow, ask again, or block with one tap — every decision is recorded.' },
+  { id: 'audit', label: 'History', sub: 'A permanent record of every important event', icon: FileTextIcon, roles: ['holder', 'issuer', 'admin'], tip: 'A tamper-proof record of approvals, blocks, shares and ownership changes, stamped permanently so it can never be edited.' },
 ]
 
 const ROLE_STYLES: Record<string, string> = {
@@ -207,7 +208,8 @@ function App() {
               </Tip>
             </div>
 
-            {tab === 'dashboard' && <DashboardPanel />}
+            {tab === 'dashboard' &&
+              (user?.role === 'admin' || user?.role === 'auditor' ? <DashboardPanel /> : <HomePanel onNavigate={setTab} />)}
             {tab === 'verify' && <VerifyPanel />}
             {tab === 'trust' && <TrustPanel />}
             {tab === 'timeline' && <TimelinePanel />}

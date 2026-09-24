@@ -27,49 +27,49 @@ const D: Record<string, Record<Lang, string>> = {
     ta: 'உங்கள் அமர்விலிருந்து வெளியேறவும் (நுழைவு டோக்கனை அழித்து உள்நுழைவுப் பக்கத்திற்கு திரும்பவும்).',
   },
 
-  // Navigation
-  nav_dashboard: { en: 'Dashboard', hi: 'डैशबोर्ड', ta: 'டாஷ்போர்டு' },
-  nav_verify: { en: 'Verify QR', hi: 'QR सत्यापित करें', ta: 'QR சரிபார்க்கவும்' },
-  nav_trust: { en: 'Trust score', hi: 'विश्वास स्कोर', ta: 'நம்பிக்கை மதிப்பெண்' },
-  nav_timeline: { en: 'Security timeline', hi: 'सुरक्षा समयरेखा', ta: 'பாதுகாப்பு காலவரிசை' },
-  nav_credentials: { en: 'Credentials', hi: 'प्रमाणपत्र', ta: 'சான்றிதழ்கள்' },
-  nav_assets: { en: 'Assets & policies', hi: 'दस्तावेज़ और नियम', ta: 'ஆவணங்கள் & விதிகள்' },
-  nav_access: { en: 'Access requests', hi: 'अनुमति अनुरोध', ta: 'அனுமதி கோரிக்கைகள்' },
-  nav_audit: { en: 'Audit trail', hi: 'ऑडिट ट्रेल', ta: 'தணிக்கைத் தடம்' },
+  // Navigation (friendly, plain-language)
+  nav_dashboard: { en: 'Home', hi: 'होम', ta: 'முகப்பு' },
+  nav_verify: { en: 'Verify', hi: 'सत्यापित करें', ta: 'சரிபார்' },
+  nav_trust: { en: 'Security check', hi: 'सुरक्षा जाँच', ta: 'பாதுகாப்பு சரிபார்ப்பு' },
+  nav_timeline: { en: 'Activity', hi: 'गतिविधि', ta: 'செயல்பாடு' },
+  nav_credentials: { en: 'My certificates', hi: 'मेरे प्रमाणपत्र', ta: 'என் சான்றிதழ்கள்' },
+  nav_assets: { en: 'My documents', hi: 'मेरे दस्तावेज़', ta: 'என் ஆவணங்கள்' },
+  nav_access: { en: 'Requests', hi: 'अनुरोध', ta: 'கோரிக்கைகள்' },
+  nav_audit: { en: 'History', hi: 'इतिहास', ta: 'வரலாறு' },
 
-  // Decisions
-  dec_ALLOW: { en: 'Access allowed', hi: 'अनुमति दी गई', ta: 'அணுகல் அனுமதிக்கப்பட்டது' },
+  // Decisions (friendly — hidden machinery underneath)
+  dec_ALLOW: { en: 'Allowed', hi: 'अनुमति मिली', ta: 'அனுமதிக்கப்பட்டது' },
   dec_STEP_UP: {
-    en: 'Step-up verification required',
-    hi: 'अतिरिक्त सत्यापन आवश्यक',
-    ta: 'கூடுதல் சரிபார்ப்பு தேவை',
+    en: 'Needs more checking',
+    hi: 'और जाँच चाहिए',
+    ta: 'மேலும் சரிபார்ப்பு தேவை',
   },
   dec_RESTRICTED: {
-    en: 'Access restricted',
-    hi: 'पहुंच प्रतिबंधित',
-    ta: 'அணுகல் கட்டுப்படுத்தப்பட்டது',
+    en: 'Limited access',
+    hi: 'सीमित पहुँच',
+    ta: 'வரம்புடன் அணுகல்',
   },
-  dec_DENY: { en: 'Access denied', hi: 'पहुंच अस्वीकृत', ta: 'அணுகல் மறுக்கப்பட்டது' },
+  dec_DENY: { en: 'Blocked', hi: 'रोका गया', ta: 'தடுக்கப்பட்டது' },
 
   decHit_ALLOW: {
-    en: 'Your request is safe. You may proceed.',
-    hi: 'आपका अनुरोध सुरक्षित है। आगे बढ़ सकते हैं।',
-    ta: 'உங்கள் கோரிக்கை பாதுகாப்பானது. தொடரலாம்.',
+    en: 'You can proceed.',
+    hi: 'आप आगे बढ़ सकते हैं।',
+    ta: 'நீங்கள் தொடரலாம்.',
   },
   decHit_STEP_UP: {
-    en: 'One more verification is needed for your safety.',
-    hi: 'सुरक्षा के लिए एक बार और सत्यापन चाहिए।',
-    ta: 'பாதுகாப்பிற்காக மீண்டும் ஒருமுறை சரிபார்ப்பு தேவை.',
+    en: 'One more quick check is needed.',
+    hi: 'एक बार और त्वरित जाँच चाहिए।',
+    ta: 'மேலும் ஒரு விரைவான சரிபார்ப்பு தேவை.',
   },
   decHit_RESTRICTED: {
-    en: 'Access is limited to read-only for now.',
-    hi: 'अभी पहुँच केवल पढ़ने तक सीमित है।',
-    ta: 'இப்போது அணுகல் படிக்க மட்டுமே வரம்பிடப்பட்டுள்ளது.',
+    en: 'You can only read this for now.',
+    hi: 'अभी आप इसे केवल पढ़ सकते हैं।',
+    ta: 'இப்போது இதை படிக்க மட்டுமே முடியும்.',
   },
   decHit_DENY: {
-    en: 'Access denied. The reason is shown below.',
-    hi: 'पहुंच अस्वीकृत। कारण नीचे दिया गया है।',
-    ta: 'அணுகல் மறுக்கப்பட்டது. காரணம் கீழே உள்ளது.',
+    en: 'This was blocked. The reason is below.',
+    hi: 'इसे रोक दिया गया। कारण नीचे है।',
+    ta: 'இது தடுக்கப்பட்டது. காரணம் கீழே உள்ளது.',
   },
 
   // Reason codes (plain-language, low-literacy friendly)
@@ -227,9 +227,9 @@ const D: Record<string, Record<Lang, string>> = {
   },
   verify_result_title: { en: 'Verification result', hi: 'सत्यापन परिणाम', ta: 'சரிபார்ப்பு முடிவு' },
   verify_result_sub: {
-    en: 'Signature + short expiry = forward proof; status = live registry state',
-    hi: 'हस्ताक्षर + छोटी अवधि = सबूत; स्थिति = वास्तविक पंजीकरण स्थिति',
-    ta: 'கையொப்பம் + குறுகிய காலம் = சான்று; நிலை = நேரடி பதிவு நிலை',
+    en: 'Umbrella result: real or fake. Details below stay minimal on purpose.',
+    hi: 'एक ही परिणाम: असली या नकली। विवरण जान-बूझकर सीमित रखे गए हैं।',
+    ta: 'முடிவு: உண்மையானது அல்லது போலியானது. விவரங்கள் வேண்டுமென்றே குறைவாகவே வைக்கப்படுகின்றன.',
   },
   verify_paste: {
     en: 'Paste the short-lived token the holder generated',
@@ -265,6 +265,60 @@ const D: Record<string, Record<Lang, string>> = {
   },
   onboard_start: { en: 'Got it — let me in', hi: 'समझ गया — अंदर ले चलें', ta: 'சரி — என்னை உள்ளே அனுப்பு' },
   onboard_replay: { en: 'Play tour again', hi: 'टूर फिर से सुनें', ta: 'விளக்கத்தை மீண்டும் கேளுங்கள்' },
+
+  // Home screen — plain language, zero jargon
+  home_welcome: { en: 'Welcome!', hi: 'आपका स्वागत है!', ta: 'வரவேற்கிறோம்!' },
+  home_sub: {
+    en: 'Everything below is handled safely for you — no setup, no keys, no confusing settings.',
+    hi: 'नीचे सब कुछ आपके लिए सुरक्षित रूप से संभाला जाता है — न कोई सेटअप, न कोई चाबियाँ, न कोई जटिल स्क्रिप्ट।',
+    ta: 'கீழே உள்ள அனைத்தும் உங்களுக்காகப் பாதுகாப்பாக நிர்வகிக்கப்படுகிறது — எந்த அமைப்பும் இல்லை, சாவிகள் இல்லை.',
+  },
+  home_security: { en: 'Security check', hi: 'सुरक्षा जाँच', ta: 'பாதுகாப்பு சரிபார்ப்பு' },
+  home_security_line: {
+    en: 'Your account is in good shape right now.',
+    hi: 'आपका खाता अभी ठीक है।',
+    ta: 'உங்கள் கணக்கு இப்போது நல்ல நிலையில் உள்ளது.',
+  },
+  home_certs: { en: 'My certificates', hi: 'मेरे प्रमाणपत्र', ta: 'என் சான்றிதழ்கள்' },
+  home_docs: { en: 'My documents', hi: 'मेरे दस्तावेज़', ta: 'என் ஆவணங்கள்' },
+  home_requests: { en: 'Requests for my documents', hi: 'मेरे दस्तावेज़ों के अनुरोध', ta: 'என் ஆவணங்களுக்கான கோரிக்கைகள்' },
+  home_none: { en: 'nothing yet', hi: 'अभी कुछ नहीं', ta: 'இன்னும் எதுவும் இல்லை' },
+  home_activity: { en: 'Recent activity', hi: 'हाल की गतिविधि', ta: 'சமீபத்திய செயல்பாடு' },
+  home_quick: { en: 'What would you like to do?', hi: 'आप क्या करना चाहेंगे?', ta: 'நீங்கள் என்ன செய்ய விரும்புகிறீர்கள்?' },
+  act_add_cert: { en: 'Add a certificate', hi: 'प्रमाणपत्र जोड़ें', ta: 'சான்றிதழைச் சேர்க்க' },
+  act_add_cert_hint: {
+    en: 'A school, university or office adds it for you once.',
+    hi: 'स्कूल, विश्वविद्यालय या दफ्तर इसे एक बार जोड़ देता है।',
+    ta: 'பள்ளி, பல்கலைக்கழகம் அல்லது அலுவலகம் அதை ஒருமுறை சேர்க்கும்.',
+  },
+  act_store_doc: { en: 'Store a document', hi: 'दस्तावेज़ रखें', ta: 'ஆவணத்தைச் சேமிக்க' },
+  act_store_doc_hint: {
+    en: 'Upload anything important. It is locked safely.',
+    hi: 'कोई भी ज़रूरी चीज़ अपलोड करें। यह सुरक्षित रूप से बंद रहती है।',
+    ta: 'முக்கியமானதை பதிவேற்றுங்கள். அது பாதுகாப்பாகப் பூட்டப்படும்.',
+  },
+  act_share: { en: 'Share a proof', hi: 'प्रमाण साझा करें', ta: 'சான்றைப் பகிர' },
+  act_share_hint: {
+    en: 'Make a short-lived QR that proves a certificate is real.',
+    hi: 'एक अल्पकालिक QR बनाएँ जो साबित करे कि प्रमाणपत्र असली है।',
+    ta: 'சான்றிதழ் உண்மையானது என நிரூபிக்கும் குறுகியகால QR உருவாக்கவும்.',
+  },
+  act_check: { en: 'Check my security', hi: 'अपनी सुरक्षा जाँचें', ta: 'என் பாதுகாப்பைச் சரிபார்' },
+  act_check_hint: {
+    en: 'See how healthy your account is, right now.',
+    hi: 'देखें कि आपका खाता अभी कितना सुरक्षित है।',
+    ta: 'உங்கள் கணக்கு இப்போது எவ்வளவு பாதுகாப்பானது எனப் பார்க்கவும்.',
+  },
+  act_requests: { en: 'Handle requests', hi: 'अनुरोध संभालें', ta: 'கோரிக்கைகளைக் கையாள' },
+  act_requests_hint: {
+    en: 'Allow or block who can see your documents.',
+    hi: 'देखें कि कौन आपके दस्तावेज़ देख सकता है और कौन नहीं।',
+    ta: 'உங்கள் ஆவணங்களை யார் பார்க்கலாம் என்பதை அனுமதியுங்கள்.',
+  },
+  act_have: { en: 'You currently have', hi: 'आपके पास अभी हैं', ta: 'இப்போது உங்களிடம் உள்ளன' },
+  certs_unit: { en: 'certificates', hi: 'प्रमाणपत्र', ta: 'சான்றிதழ்கள்' },
+  docs_unit: { en: 'documents', hi: 'दस्तावेज़', ta: 'ஆவணங்கள்' },
+  pending_unit: { en: 'pending requests', hi: 'लंबित अनुरोध', ta: 'நிலுவை கோரிக்கைகள்' },
 }
 
 export function tr(lang: Lang, key: string): string {

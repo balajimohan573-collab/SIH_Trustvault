@@ -43,7 +43,7 @@ export default function AccessPanel() {
     setMsg(null)
     try {
       await api.post('/access/request', { asset_id: reqAsset, purpose: reqPurpose })
-      setMsg({ tone: 'green', text: `Access request created for ${reqPurpose} — waiting for owner approval.` })
+      setMsg({ tone: 'green', text: `Your request was sent to the document owner.` })
       await refresh()
     } catch (e: any) {
       setMsg({
@@ -64,8 +64,8 @@ export default function AccessPanel() {
     if (r) {
       setMsg(
         d === 'approve'
-          ? { tone: 'green', text: `Grant created — purpose- and time-bound (${minutes}m).` }
-          : { tone: 'amber', text: 'Request denied.' },
+          ? { tone: 'green', text: `Allowed — they can view it for ${minutes} minutes.` }
+          : { tone: 'amber', text: 'Blocked — the request is closed.' },
       )
     }
     await refresh()
@@ -81,14 +81,14 @@ export default function AccessPanel() {
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
       <Panel
-        title="Request access"
-        subtitle="Requester asks; owner grants a scoped, expiring grant"
+        title="Ask to view a document"
+        subtitle="Tell the owner why you need it — they decide"
         icon={<KeyIcon className="h-5 w-5" />}
       >
         <div className="space-y-3.5">
-          <Field label="Asset" hint="the document you need">
+          <Field label="Document" hint="the document you need">
             <Select value={reqAsset} onChange={(e) => setReqAsset(e.target.value)}>
-              <option value="">Select asset…</option>
+              <option value="">Select document…</option>
               {assets.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name} ({a.id.slice(0, 8)}…)
@@ -96,26 +96,26 @@ export default function AccessPanel() {
               ))}
             </Select>
           </Field>
-          <Field label="Purpose" hint="why you need access">
+          <Field label="Why I need it" hint="e.g. job application, verification">
             <Input value={reqPurpose} onChange={(e) => setReqPurpose(e.target.value)} placeholder="purpose" />
           </Field>
           <BtnPrimary className="w-full" onClick={requestAccess} disabled={!reqAsset}>
-            Submit access request
+            Ask for access
           </BtnPrimary>
           {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
         </div>
       </Panel>
 
       <Panel
-        title="Incoming requests"
-        subtitle="Owner approves with an expiry window, or denies"
+        title="Who is asking"
+        subtitle="Allow, ask again, or block — one tap each"
         icon={<UserIcon className="h-5 w-5" />}
       >
         {requests.length === 0 ? (
           <EmptyState
             icon={<UserIcon className="h-5 w-5" />}
-            title="No incoming requests"
-            hint="Requests land here for the asset owner to approve or deny with a scoped, time-bound grant."
+            title="No requests right now"
+            hint="When someone asks to see one of your documents, it shows up here for you to allow, ask again, or block."
           />
         ) : (
           <div className="space-y-3">

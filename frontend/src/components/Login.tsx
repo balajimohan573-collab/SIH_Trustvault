@@ -6,17 +6,17 @@ import LanguageSwitcher from './LanguageSwitcher'
 import { useLang, tr } from '../i18n'
 
 const DEMO_ACCOUNTS = [
-  { email: 'issuer@trustvault.example', label: 'Issuer', desc: 'An institution that issues credentials', dot: 'bg-sky-500', tip: 'Sign in as Issuer to issue, verify and revoke hash-only credentials.' },
-  { email: 'holder@trustvault.example', label: 'Holder', desc: 'A user with encrypted assets & policies', dot: 'bg-emerald-500', tip: 'Sign in as Holder to upload encrypted documents, create ABAC policies, and approve/deny access requests.' },
-  { email: 'verifier@trustvault.example', label: 'Verifier', desc: 'An employer requesting scoped access', dot: 'bg-violet-500', tip: 'Sign in as Verifier to request purpose-scoped, time-bound access and download when allowed.' },
-  { email: 'admin@trustvault.example', label: 'Admin', desc: 'Platform administrator with override', dot: 'bg-rose-500', tip: 'Sign in as Admin to view all areas and use the documented, audited override for recovery scenarios.' },
+  { email: 'issuer@trustvault.example', label: 'Issuer', desc: 'A school, university or office that adds certificates', dot: 'bg-sky-500', tip: 'Sign in as Issuer to add, verify and cancel certificates.' },
+  { email: 'holder@trustvault.example', label: 'Holder', desc: 'A person with documents and certificates', dot: 'bg-emerald-500', tip: 'Sign in as Holder to store documents, check your security, and allow or block who sees them.' },
+  { email: 'verifier@trustvault.example', label: 'Verifier', desc: 'An employer or office asking to see a document', dot: 'bg-violet-500', tip: 'Sign in as Verifier to ask for a document and get it when the owner allows.' },
+  { email: 'admin@trustvault.example', label: 'Admin', desc: 'Looks after the whole platform', dot: 'bg-rose-500', tip: 'Sign in as Admin to see everything and act only in special cases, always recorded.' },
 ]
 
 const FEATURES = [
-  { icon: <BadgeCheckIcon className="h-4 w-4" />, title: 'Verify once', text: 'Institutions issue hash-anchored credentials a single time.', tip: 'You don’t re-verify per request — trust is re-evaluated live from context and policy.' },
-  { icon: <LockIcon className="h-4 w-4" />, title: 'Privacy by design', text: 'Documents stay AES-256-GCM encrypted — never raw on chain.', tip: 'Only SHA-256 hashes and audit/decision anchors go on-chain; ciphertext stays local.' },
-  { icon: <FingerprintIcon className="h-4 w-4" />, title: 'Context-aware access', text: 'The Trust Engine re-evaluates every request against evolving risk.', tip: 'Identity + Device + Behaviour + Context + History combine into an explainable 0–100 score.' },
-  { icon: <ShieldIcon className="h-4 w-4" />, title: 'Immutably auditable', text: 'High-value events are anchored to the blockchain.', tip: 'Every high-value decision/event is logged with on-chain anchor status and a tx hash.' },
+  { icon: <BadgeCheckIcon className="h-4 w-4" />, title: 'Verified once', text: 'Schools and offices certify you just one time.', tip: 'After that every check is instant — the system re-checks safety itself, live.' },
+  { icon: <LockIcon className="h-4 w-4" />, title: 'Everything stays private', text: 'Your documents are locked — nobody reads them but you.', tip: 'Only a safe fingerprint is recorded. The actual document stays with you.' },
+  { icon: <FingerprintIcon className="h-4 w-4" />, title: 'Watches over you', text: 'It spots anything unusual and keeps you safe.', tip: 'New devices, odd timings, too many requests — each one is caught and explained in plain words.' },
+  { icon: <ShieldIcon className="h-4 w-4" />, title: 'Proof that cannot be changed', text: 'A permanent, tamper-proof record of every decision.', tip: 'Every important action is sealed permanently, so no one can deny or alter it later.' },
 ]
 
 export default function Login({ onLogin }: { onLogin: (user: any) => void }) {
@@ -64,11 +64,11 @@ export default function Login({ onLogin }: { onLogin: (user: any) => void }) {
 
           <div className="relative space-y-5">
             <p className="text-2xl font-bold leading-snug tracking-tight text-slate-900">
-              Blockchain-anchored,
+              Your documents, your
               <br />
-              privacy-preserving
+              certificates, your control —
               <br />
-              identity &amp; access control.
+              all in one safe place.
             </p>
             <div className="space-y-3.5">
               {FEATURES.map((f) => (
@@ -88,7 +88,7 @@ export default function Login({ onLogin }: { onLogin: (user: any) => void }) {
           </div>
 
           <p className="relative text-[11px] text-slate-400">
-            Demo build · runs free on Sepolia testnet with WebAuthn / passkey support
+            Demo build · runs free on the Sepolia test network
           </p>
         </div>
 
@@ -107,7 +107,7 @@ export default function Login({ onLogin }: { onLogin: (user: any) => void }) {
 
           <h1 className="text-xl font-bold tracking-tight text-slate-900">Sign in to get started</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Pick a role below to enter the security flow, or type your own demo email.
+            Pick a role below to walk the security flow, or type your own demo email.
           </p>
 
           <form
@@ -117,7 +117,7 @@ export default function Login({ onLogin }: { onLogin: (user: any) => void }) {
               signIn(email)
             }}
           >
-            <Field label="Email" hint="dev-login fallback (no password needed)">
+            <Field label="Email" hint="demo login (no password needed)">
               <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@trustvault.example" />
             </Field>
             <BtnPrimary className="w-full" disabled={busy}>
@@ -128,7 +128,7 @@ export default function Login({ onLogin }: { onLogin: (user: any) => void }) {
 
           <div className="my-6 flex items-center gap-3">
             <div className="h-px flex-1 bg-ink-700" />
-            <span className="text-[11px] uppercase tracking-widest text-slate-400">or demo role</span>
+            <span className="text-[11px] uppercase tracking-widest text-slate-400">or try a demo role</span>
             <div className="h-px flex-1 bg-ink-700" />
           </div>
 
@@ -158,9 +158,8 @@ export default function Login({ onLogin }: { onLogin: (user: any) => void }) {
           </div>
 
           <Notice tone="slate" className="mt-6">
-            <span className="font-medium">Why demo roles?</span> The dev-login fallback lets the whole security
-            flow run without a hardware authenticator. The production path uses WebAuthn passkeys ({' '}
-            <code className="font-mono text-[10px] text-rose-600">register/start → complete → login/start → complete</code>).
+            <span className="font-medium">Why demo roles?</span> They let the whole security flow run without extra
+            hardware. In the real version, people sign in on their own device with one touch.
           </Notice>
 
           {error && (

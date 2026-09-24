@@ -55,16 +55,16 @@ export default function VerifyPanel() {
         title={tr(lang, 'verify_title')}
         subtitle={tr(lang, 'verify_paste')}
         icon={<QrCodeIcon className="h-5 w-5" />}
-        help="The QR token is an HMAC-signed, short-lived JWT bound to exactly one credential + purpose. Anyone with the token can verify it: the signature proves it came from this platform and the 5-minute expiry bounds its lifetime. Only minimal claims are disclosed (validity, type, holder DID, purpose) - never the raw document."
+        help="A QR token is a short-lived permission slip that proves a certificate is real and only shows the bare minimum - never the certificate itself. It works for up to 5 minutes and expires automatically."
       >
         <div className="space-y-3.5">
-          <Field label="QR token" hint="from the holder's QR or the Credentials tab">
+          <Field label="QR token" hint="from the holder's QR or the certificates tab">
             <Textarea
               rows={5}
               className="font-mono text-xs"
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              placeholder="eyJhbGciOiJIUzI1NiIs..."
+              placeholder="paste the token shown in the QR link"
             />
           </Field>
           <div className="flex flex-wrap items-center gap-2">
@@ -93,8 +93,8 @@ export default function VerifyPanel() {
             </div>
             <p className="text-sm font-medium text-slate-600">{tr(lang, 'verify_none')}</p>
             <p className="max-w-xs text-xs text-slate-400">
-              Scan a holder's QR or paste its token here. The result proves the credential exists, is signed by the
-              platform, and has not been revoked.
+              Scan a holder's QR or paste its token here. The result proves the certificate exists, was issued by a
+              trusted office, and has not been cancelled.
             </p>
           </div>
         ) : (
@@ -119,14 +119,14 @@ export default function VerifyPanel() {
             )}
             <dl className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {[
-                ['Credential id', result.id],
+                ['Certificate id', result.id],
                 ['Type', result.type],
-                ['Holder DID', result.holder_did],
-                ['Issuer id', result.issuer_id],
+                ['Holder', result.holder_did],
+                ['Issued by', result.issuer_id],
                 ['Issued', result.issued_at ? new Date(result.issued_at).toLocaleString() : null],
                 ['Purpose', result.purpose],
                 ['Expires', result.expires_at ? new Date(result.expires_at).toLocaleTimeString() : null],
-                ['Selective disclosure ready', result.selective_disclosure_ready ? 'yes' : 'no'],
+                ['Shows only the minimum', result.selective_disclosure_ready ? 'yes' : 'no'],
               ].map(([k, v]) => (
                 <div key={String(k)} className="rounded-lg border border-white/60 bg-white/70 px-3 py-2">
                   <dt className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{k}</dt>

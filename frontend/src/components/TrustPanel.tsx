@@ -5,11 +5,11 @@ import { ShieldIcon } from './icons'
 import { useLang, tr } from '../i18n'
 
 const COMPONENTS = [
-  { key: 'identity', label: 'Identity', weight: 30, desc: 'credential validity & auth failures' },
-  { key: 'device', label: 'Device', weight: 20, desc: 'known & active vs new or revoked' },
-  { key: 'behaviour', label: 'Behaviour', weight: 20, desc: 'request velocity & access sequences' },
-  { key: 'context', label: 'Context', weight: 15, desc: 'unusual hour or geo penalty' },
-  { key: 'history', label: 'History', weight: 15, desc: 'recent anomaly decisions' },
+  { key: 'identity', label: 'Who you are', weight: 30, desc: 'certificate good & logins fine' },
+  { key: 'device', label: 'Your device', weight: 20, desc: 'device you usually use' },
+  { key: 'behaviour', label: 'How you act', weight: 20, desc: 'too many requests too fast' },
+  { key: 'context', label: 'Where & when', weight: 15, desc: 'unusual hour or place' },
+  { key: 'history', label: 'Your history', weight: 15, desc: 'recently safe or risky' },
 ]
 
 export default function TrustPanel() {
@@ -32,11 +32,11 @@ export default function TrustPanel() {
   if (!state) {
     return (
       <Panel
-        title="Trust score"
+        title="Security check"
         icon={<ShieldIcon className="h-5 w-5" />}
-        help="Your live Trust Engine score. This updates automatically every few seconds based on identity, device, behaviour, context and history signals."
+        help="Your account health, updated every few seconds. A score over 70 means everything looks good."
       >
-        <p className="text-sm text-slate-500">Loading trust state…</p>
+        <p className="text-sm text-slate-500">Loading your security check…</p>
       </Panel>
     )
   }
@@ -49,14 +49,17 @@ export default function TrustPanel() {
   const decisionLine = tr(lang, `decHit_${state.decision}`)
   const theory = tr(lang, `dec_${state.decision}`)
 
+  const scoreWord = score >= 70 ? 'Looking good' : score >= 40 ? 'Be careful' : 'Risk'
+  const scoreTone = score >= 70 ? 'text-emerald-600' : score >= 40 ? 'text-amber-600' : 'text-rose-600'
+
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
       <Panel
-        title="Trust score"
-        subtitle={`model ${state.model_version}`}
+        title="Security check"
+        subtitle={`check ${state.model_version}`}
         icon={<ShieldIcon className="h-5 w-5" />}
-        actions={<Badge tone={tone} dot>{state.decision}</Badge>}
-        help="Overall risk score (0-100) computed by the Trust Engine. ALLOW >= 70, STEP_UP 40-69, RESTRICTED for non-strict context misses, DENY < 40 or any hard policy failure. AI/ML may only restrict, never grant."
+        actions={<Badge tone={tone} dot>{theory}</Badge>}
+        help="0-100 health score. Over 70 is good, 40-69 means extra care, under 40 is risky. It only protects you — it never grants more than you allowed."
       >
         <div className="flex flex-col items-center py-4">
           <div className="relative h-32 w-32">
@@ -86,7 +89,8 @@ export default function TrustPanel() {
             </div>
           </div>
 
-          <p className="mt-4 max-w-[240px] text-center text-xs leading-relaxed text-slate-600">
+          <p className={cn('mt-2 text-sm font-bold', scoreTone)}>{scoreWord}</p>
+          <p className="mt-1 max-w-[240px] text-center text-xs leading-relaxed text-slate-600">
             {decisionLine}
           </p>
 
@@ -98,12 +102,12 @@ export default function TrustPanel() {
           {state.ml_signal !== null && (
             <div className="mt-4 w-full rounded-xl border border-ink-700 bg-slate-50 px-3 py-2">
               <div className="flex items-center justify-between text-[11px]">
-                <span className="text-slate-600">ML anomaly signal</span>
+                <span className="text-slate-600">AI watch</span>
                 <span className={cn('font-mono', state.ml_signal < 0 ? 'text-amber-600' : 'text-slate-800')}>
                   {state.ml_signal.toFixed(3)}
                 </span>
               </div>
-              <p className="mt-0.5 text-[10px] text-slate-500">negative = outlier (Isolation Forest)</p>
+              <p className="mt-0.5 text-[10px] text-slate-500">a negative value means something unusual was spotted</p>
             </div>
           )}
         </div>
@@ -111,9 +115,9 @@ export default function TrustPanel() {
 
       <div className="space-y-5 lg:col-span-2">
         <Panel
-          title="How the score is built"
-          subtitle="Weighted signals, refreshed continuously"
-          help="Each component contributes a weighted % to the final score. Low percentages pull trust down; high percentages raise it."
+          title="What makes up your score"
+          subtitle="Each part carries a weight — low values pull the score down"
+          help="Your score combines healthy signals. Big drops happen when something looks off, such as a cancelled certificate, an unknown device, or too many requests too fast."
         >
           <div className="space-y-4">
             {COMPONENTS.map((c) => {
@@ -143,13 +147,13 @@ export default function TrustPanel() {
         </Panel>
 
         <Panel
-          title="Explainability — reason codes"
-          subtitle="Every decision is explainable and auditable"
-          help="Reason codes show exactly why the engine chose ALLOW/STEP_UP/RESTRICTED/DENY (e.g. CREDENTIAL_REVOKED, REQUEST_VELOCITY_EXCESSIVE, LOCATION_MISMATCH). They are included in audit logs."
+          title="Why, in simple words"
+          subtitle="Every decision explains itself — no jargon"
+          help="Simple reason chips tell you why the check is green, amber or red (for example, a cancelled certificate, or too many requests at once). These are also kept in your permanent History."
           actions={
             <details className="group text-xs">
               <summary className="cursor-pointer rounded-lg border border-ink-700 bg-white px-2.5 py-1.5 font-medium text-slate-600 transition hover:text-slate-900">
-                Raw JSON
+                Raw details
               </summary>
               <pre className="mt-2 max-h-64 overflow-auto rounded-lg border border-ink-700 bg-slate-50 p-3 font-mono text-[10px] leading-relaxed text-slate-700">
                 {JSON.stringify(
@@ -177,7 +181,7 @@ export default function TrustPanel() {
               </span>
             ))}
           </div>
-          {state.reasons.length === 0 && <p className="mt-2 text-xs text-slate-500">No anomalies — the policy pipeline is running clean.</p>}
+          {state.reasons.length === 0 && <p className="mt-2 text-xs text-slate-500">Everything looks normal — nothing needs your attention.</p>}
         </Panel>
       </div>
     </div>
