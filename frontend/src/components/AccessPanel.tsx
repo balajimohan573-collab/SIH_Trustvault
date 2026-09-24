@@ -1,7 +1,26 @@
 import { useEffect, useState } from 'react'
 import { api, type AccessRequest, type Asset } from '../api'
-import { Badge, EmptyState, Field, Notice, Panel, BtnGhost, BtnPrimary, BtnDanger, Input, Select } from './ui'
+import { Badge, EmptyState, Field, Notice, Panel, BtnPrimary, Input, Select, SpeakerButton, cn } from './ui'
 import { ClockIcon, KeyIcon, UserIcon } from './icons'
+import { useLang, tr, speak } from '../i18n'
+
+const BIG = {
+  allow: {
+    icon: '✓',
+    active: 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30',
+    hit: 'allow_hit',
+  },
+  ask_again: {
+    icon: '⟳',
+    active: 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/30',
+    hit: 'ask_again_hit',
+  },
+  block: {
+    icon: '✕',
+    active: 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/30',
+    hit: 'block_hit',
+  },
+} as const
 
 export default function AccessPanel() {
   const [assets, setAssets] = useState<Asset[]>([])
@@ -9,6 +28,7 @@ export default function AccessPanel() {
   const [reqAsset, setReqAsset] = useState('')
   const [reqPurpose, setReqPurpose] = useState('employment')
   const [msg, setMsg] = useState<{ tone: 'green' | 'red' | 'amber' | 'slate'; text: string } | null>(null)
+  const lang = useLang()
 
   async function refresh() {
     setAssets(await api.get<Asset[]>('/assets'))
@@ -49,6 +69,13 @@ export default function AccessPanel() {
       )
     }
     await refresh()
+  }
+
+  async function bigTap(r: AccessRequest, kind: keyof typeof BIG) {
+    const minutes = Number((document.getElementById(`dur-${r.id}`) as HTMLInputElement)?.value ?? 30)
+    if (kind === 'allow') await decide(r.id, 'approve', minutes)
+    else await decide(r.id, 'deny', minutes)
+    speak(tr(lang, BIG[kind].hit), lang)
   }
 
   return (
@@ -101,7 +128,7 @@ export default function AccessPanel() {
                   <span className="text-sm font-medium text-slate-800">{r.purpose}</span>
                   <span className="ml-auto">
                     <Badge tone={r.status === 'approved' ? 'green' : r.status === 'denied' ? 'red' : 'slate'} dot>
-                      {r.status}
+                      {r.status === 'approved' ? tr(lang, 'status_approved') : r.status === 'denied' ? tr(lang, 'status_denied') : tr(lang, 'status_pending')}
                     </Badge>
                   </span>
                 </div>
@@ -109,29 +136,44 @@ export default function AccessPanel() {
                   requester {r.requester_id.slice(0, 10)}… · {new Date(r.created_at).toLocaleString()}
                 </p>
                 {r.status === 'pending' && (
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
-                      <ClockIcon className="h-3.5 w-3.5 text-slate-500" />
-                      <input
-                        type="number"
-                        defaultValue={30}
-                        min={1}
-                        max={1440}
-                        id={`dur-${r.id}`}
-                        className="w-14 bg-transparent text-xs text-slate-800 outline-none"
-                        title="Grant duration in minutes"
+                  <div className="mt-4">
+                    <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                      <span className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+                        <ClockIcon className="h-3.5 w-3.5 text-slate-500" />
+                        <input
+                          type="number"
+                          defaultValue={30}
+                          min={1}
+                          max={1440}
+                          id={`dur-${r.id}`}
+                          className="w-14 bg-transparent text-xs text-slate-800 outline-none"
+                          title="Grant duration in minutes"
+                        />
+                        <span className="text-[10px] text-slate-500">min</span>
+                      </span>
+                      <span className="text-slate-500">{tr(lang, 'request_status')}</span>
+                      <SpeakerButton
+                        text={`${tr(lang, 'request_status')}. ${tr(lang, 'allow')}, ${tr(lang, 'ask_again')}, ${tr(lang, 'block')}?`}
+                        tone="slate"
                       />
-                      <span className="text-[10px] text-slate-500">min</span>
                     </div>
-                    <BtnGhost
-                      className="!px-3 !py-1.5 text-xs !text-emerald-600 hover:!border-emerald-400 hover:!text-emerald-700"
-                      onClick={() => decide(r.id, 'approve', Number((document.getElementById(`dur-${r.id}`) as HTMLInputElement)?.value ?? 30))}
-                    >
-                      Approve
-                    </BtnGhost>
-                    <BtnDanger className="!px-3 !py-1.5 text-xs" onClick={() => decide(r.id, 'deny')}>
-                      Deny
-                    </BtnDanger>
+
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      {(Object.keys(BIG) as (keyof typeof BIG)[]).map((k) => (
+                        <button
+                          key={k}
+                          disabled={false}
+                          onClick={() => bigTap(r, k)}
+                          className={cn(
+                            'flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-4 text-sm font-bold text-white shadow-lg transition active:scale-95',
+                            BIG[k].active,
+                          )}
+                        >
+                          <span className="text-xl leading-none">{BIG[k].icon}</span>
+                          {tr(lang, k === 'allow' ? 'allow' : k === 'ask_again' ? 'ask_again' : 'block')}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

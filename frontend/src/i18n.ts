@@ -237,6 +237,19 @@ const D: Record<string, Record<Lang, string>> = {
     ta: 'உரிமையாளர் உருவாக்கிய குறுகியகால டோக்கனை ஒட்டவும்',
   },
   speak_button: { en: 'Listen', hi: 'सुनें', ta: 'கேளுங்கள்' },
+  // Access screen — three big buttons
+  allow: { en: 'Allow', hi: 'अनुमति दें', ta: 'அனுமதி' },
+  ask_again: { en: 'Ask again', hi: 'फिर पूछें', ta: 'மறுபடியும் கேள்' },
+  block: { en: 'Block', hi: 'रोकें', ta: 'தடு' },
+  allow_hit: { en: 'Grant created. They can view it until it expires.', hi: 'अनुमति दी गई। समाप्ति तक वे देख सकेंगे।', ta: 'அனுமதி வழங்கப்பட்டது. காலம் முடியும் வரை அவரால் பார்க்க முடியும்.' },
+  ask_again_hit: { en: 'Denied for now. Ask them to try again later.', hi: 'अभी अस्वीकृत। बाद में फिर पूछें।', ta: 'இப்போது மறுக்கப்பட்டது. பின்னர் மீண்டும் கேட்கவும்.' },
+  block_hit: { en: 'Blocked. The request is closed.', hi: 'रोका गया। अनुरोध बंद हो गया।', ta: 'தடுக்கப்பட்டது. கோரிக்கை முடிந்தது.' },
+  approve_act: { en: 'Approve', hi: 'स्वीकृत', ta: 'ஏற்கவும்' },
+  deny_act: { en: 'Deny', hi: 'अस्वीकृत', ta: 'மறுக்கவும்' },
+  request_status: { en: 'new request for your document', hi: 'आपके दस्तावेज़ के लिए अनुरोध', ta: 'உங்கள் ஆவணத்திற்கான கோரிக்கை' },
+  status_pending: { en: 'pending', hi: 'लंबित', ta: 'நிலுவையில்' },
+  status_approved: { en: 'approved', hi: 'स्वीकृत', ta: 'ஏற்கப்பட்டது' },
+  status_denied: { en: 'denied', hi: 'अस्वीकृत', ta: 'மறுக்கப்பட்டது' },
 }
 
 export function tr(lang: Lang, key: string): string {
