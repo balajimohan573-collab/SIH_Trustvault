@@ -1,12 +1,13 @@
-"""Reset the local dev database and encrypted storage, then re-seed demo users.
+"""Reset the local dev database and encrypted storage.
 
 Run BEFORE starting the backend (the DB file must not be locked):
 
     cd backend
     .\\.venv\\Scripts\\python.exe scripts\\reset_db.py --yes
 
-Afterwards start the server and run scripts/demo.py and scripts/attack_sim.py
-on a clean, reproducible board.
+Afterwards start the server and, for a live demo board, run
+test_e2e_acceptance.py (creates real admin/holder/verifier accounts and a
+test credential via real API flows), then drive the app from the UI.
 """
 import argparse
 import shutil
@@ -47,11 +48,9 @@ def main():
     from app.db.init_db import init_db  # noqa: E402
 
     init_db()
-    print("Database reset and re-seeded:")
-    print("  admin@trustvault.example   (admin)")
-    print("  issuer@trustvault.example  (issuer)")
-    print("  holder@trustvault.example  (holder)")
-    print("  verifier@trustvault.example(verifier)")
+    print("Database reset. Schema created only — no demo users are seeded.")
+    print("The guaranteed admin account is created at server boot from")
+    print("TRUSTVAULT_ADMIN_EMAIL / TRUSTVAULT_ADMIN_PASSWORD (see app/main.py).")
 
 
 if __name__ == "__main__":

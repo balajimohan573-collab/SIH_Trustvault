@@ -1,147 +1,216 @@
-import { useState } from 'react'
-import { qrApi } from '../api'
-import { Badge, Notice, Panel, BtnPrimary, Field, Textarea, Tip, SpeakerButton } from './ui'
-import { QrCodeIcon, CheckIcon } from './icons'
-import { useLang, tr } from '../i18n'
+import { useCallback, useEffect, useState } from 'react'
+import { CheckIcon, ChevronDownIcon, QrCodeIcon, ShieldIcon } from './icons'
+import { Badge, BtnPrimary, EmptyState, Field, Panel, Spinner, Textarea, decisionTone } from './ui'
+import { verifyApi } from '../api'
 
-type QrResult = {
-  id: string
-  valid: boolean
-  status: string
-  hash_match: boolean
-  holder_did: string | null
-  type: string | null
-  issuer_id: string | null
-  issued_at: string | null
-  purpose: string | null
-  expires_at: string | null
-  selective_disclosure_ready: boolean
-  explanation: string | null
+type VerifyResult = Awaited<ReturnType<typeof verifyApi.byToken>>
+
+const RESULT_LABEL: Record<string, string> = {
+  VERIFIED: 'Verified Authentic',
+  INVALID: 'Not Recognized',
+  EXPIRED: 'Expired',
+  REVOKED: 'Revoked',
 }
 
-function tokenFromHash() {
-  try {
-    const m = window.location.hash.match(/[?&]token=([^&]+)/)
-    return m ? decodeURIComponent(m[1]) : ''
-  } catch {
-    return ''
-  }
-}
-
-export default function VerifyPanel() {
-  const auto = tokenFromHash()
-  const [token, setToken] = useState(auto)
-  const [result, setResult] = useState<QrResult | null>(null)
-  const [err, setErr] = useState<string | null>(null)
+export default function VerifyPanel({ initialToken }: { initialToken?: string | null }) {
+  const [token, setToken] = useState(initialToken ?? '')
+  const [result, setResult] = useState<VerifyResult | null>(null)
   const [busy, setBusy] = useState(false)
-  const lang = useLang()
+  const [error, setError] = useState<string | null>(null)
+  const [showProof, setShowProof] = useState(false)
 
-  async function verify() {
+  const handleVerify = useCallback(async (t?: string) => {
+    const value = (t ?? token).trim()
+    if (!value) return
     setBusy(true)
-    setErr(null)
+    setError(null)
     setResult(null)
     try {
-      setResult(await qrApi.verify(token.trim()))
+      const res = await verifyApi.byToken(value)
+      setResult(res)
+      if (res.reason) setError(null)
     } catch (e: any) {
-      setErr('Verification failed: ' + (e.message ?? 'unknown error'))
+      setError(e.message || 'Verification failed.')
     } finally {
       setBusy(false)
     }
-  }
+  }, [token])
+
+  useEffect(() => {
+    if (initialToken) {
+      setToken(initialToken)
+      handleVerify(initialToken)
+    }
+  }, [initialToken, handleVerify])
+
+  const ok = result?.valid === true
+  const tone = result ? (ok ? 'green' : result.checks?.['not_revoked'] === false ? 'red' : 'amber') : 'slate'
 
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-      <Panel
-        title={tr(lang, 'verify_title')}
-        subtitle={tr(lang, 'verify_paste')}
-        icon={<QrCodeIcon className="h-5 w-5" />}
-        help="A QR token is a short-lived permission slip that proves a certificate is real and only shows the bare minimum - never the certificate itself. It works for up to 5 minutes and expires automatically."
-      >
-        <div className="space-y-3.5">
-          <Field label="QR token" hint="from the holder's QR or the certificates tab">
-            <Textarea
-              rows={5}
-              className="font-mono text-xs"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder="paste the token shown in the QR link"
-            />
-          </Field>
-          <div className="flex flex-wrap items-center gap-2">
-            <BtnPrimary onClick={verify} disabled={!token.trim() || busy}>
-              {busy ? tr(lang, 'verify_btn_busy') : tr(lang, 'verify_btn')}
-            </BtnPrimary>
-            {auto && (
-              <Tip label="This token was picked up from a shared QR link (#/verify?token=...).">
-                <Badge tone="blue">token from QR link</Badge>
-              </Tip>
-            )}
+    <div className="mx-auto max-w-4xl space-y-6 animate-fade-up">
+      {/* Header banner */}
+      <div className="rounded-3xl border border-ink-700 bg-gradient-to-r from-brand-50 via-rose-50 to-white p-6 sm:p-8 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-rose-600 shadow-xl shadow-brand-600/25 text-white">
+              <ShieldIcon className="h-8 w-8" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">TRUSTVAULT Verification</h1>
+              <p className="text-xs text-slate-500 mt-1">Public, tamper-proof credential verification</p>
+            </div>
           </div>
-          {err && <Notice tone="red">{err}</Notice>}
+          {result && (
+            <div className={`flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-bold border ${tone === 'green' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : tone === 'red' ? 'bg-rose-100 text-rose-800 border-rose-200' : 'bg-amber-100 text-amber-800 border-amber-200'}`}>
+              <span className="h-2 w-2 rounded-full bg-current animate-pulse" />
+              {RESULT_LABEL[result.result] ?? result.status}
+            </div>
+          )}
         </div>
-      </Panel>
+      </div>
 
-      <Panel
-        title={tr(lang, 'verify_result_title')}
-        subtitle={tr(lang, 'verify_result_sub')}
-        icon={<CheckIcon className="h-5 w-5" />}
-      >
-        {!result ? (
-          <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-            <div className="grid h-14 w-14 place-items-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-400">
-              <QrCodeIcon className="h-7 w-7" />
+      {/* Main Verification View */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        {/* Quick Verify Input Panel */}
+        <div className="md:col-span-1 space-y-4">
+          <Panel title="Verify Link / Token" icon={<QrCodeIcon className="h-5 w-5" />}>
+            <div className="space-y-3">
+              <Field label="Token or URL">
+                <Textarea
+                  rows={4}
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  placeholder="Paste QR verification token or link..."
+                  className="font-mono text-xs"
+                />
+              </Field>
+              <BtnPrimary className="w-full justify-center" onClick={() => handleVerify()} disabled={busy}>
+                {busy && <Spinner />}
+                {busy ? 'Verifying…' : 'Verify Credential'}
+              </BtnPrimary>
             </div>
-            <p className="text-sm font-medium text-slate-600">{tr(lang, 'verify_none')}</p>
-            <p className="max-w-xs text-xs text-slate-400">
-              Scan a holder's QR or paste its token here. The result proves the certificate exists, was issued by a
-              trusted office, and has not been cancelled.
+          </Panel>
+
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-center">
+            {result && token ? (
+              // The QR image is served by the backend for this live token.
+              <img
+                src={verifyApi.qrUrl(token.trim())}
+                alt="Live credential QR"
+                className="mx-auto h-40 w-40 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"
+              />
+            ) : (
+              <QrCodeIcon className="mx-auto h-24 w-24 text-slate-800" />
+            )}
+            <p className="mt-2 text-xs font-semibold text-slate-700">
+              {result && token ? 'Live QR for this verification token' : 'Live QR Verification'}
             </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">Scanned QR codes map directly to this proof page.</p>
           </div>
-        ) : (
-          <div
-            className={
-              result.valid
-                ? 'rounded-xl border border-emerald-200 bg-emerald-50 p-4'
-                : 'rounded-xl border border-rose-200 bg-rose-50 p-4'
-            }
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge tone={result.valid ? 'green' : 'red'} dot>
-                {result.valid ? tr(lang, 'verify_valid') : tr(lang, 'verify_invalid')}
-              </Badge>
-              <span className="font-mono text-[10px] uppercase tracking-wider text-slate-500">status · {result.status}</span>
-            </div>
-            {result.explanation && (
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <p className="text-sm font-medium text-slate-800">{result.explanation}</p>
-                <SpeakerButton text={result.explanation} tone={result.valid ? 'green' : 'red'} />
-              </div>
-            )}
-            <dl className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {[
-                ['Certificate id', result.id],
-                ['Type', result.type],
-                ['Holder', result.holder_did],
-                ['Issued by', result.issuer_id],
-                ['Issued', result.issued_at ? new Date(result.issued_at).toLocaleString() : null],
-                ['Purpose', result.purpose],
-                ['Expires', result.expires_at ? new Date(result.expires_at).toLocaleTimeString() : null],
-                ['Shows only the minimum', result.selective_disclosure_ready ? 'yes' : 'no'],
-              ].map(([k, v]) => (
-                <div key={String(k)} className="rounded-lg border border-white/60 bg-white/70 px-3 py-2">
-                  <dt className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{k}</dt>
-                  <dd className="mt-0.5 truncate font-mono text-xs text-slate-800">{String(v ?? '-')}</dd>
+          {error && <p className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">{error}</p>}
+        </div>
+
+        {/* Verification Result Card */}
+        <div className="md:col-span-2 space-y-4">
+          {!result && !error && (
+            <EmptyState
+              icon={<QrCodeIcon className="h-6 w-6" />}
+              title="No verification yet"
+              hint="Paste a verification token (or open a shared credential link) to see the live result."
+            />
+          )}
+          {result && (
+            <div className={`rounded-3xl border bg-white p-6 shadow-sm space-y-6 ${ok ? 'border-emerald-200' : 'border-slate-200'}`}>
+              <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className={`grid h-12 w-12 place-items-center rounded-2xl ${ok ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                    <CheckIcon className="h-7 w-7" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900">{RESULT_LABEL[result.result] ?? result.result}</h2>
+                    <p className="text-xs text-slate-500">Integrity and status as recorded by the issuer</p>
+                  </div>
                 </div>
-              ))}
-            </dl>
-            {!result.valid && result.status === 'invalid_token' && (
-              <Notice tone="red" className="mt-3">
-                The token is missing, tampered with, or expired. Ask the holder to refresh their QR link.
-              </Notice>
-            )}
-          </div>
-        )}
-      </Panel>
+                <Badge tone={decisionTone(ok ? 'ALLOW' : 'DENY')} dot className="px-3 py-1 text-xs">
+                  {result.status}
+                </Badge>
+              </div>
+
+              {/* Verified Details Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Credential</span>
+                  <p className="mt-1 text-sm font-bold text-slate-900">{result.type ?? '—'}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Holder</span>
+                  <p className="mt-1 text-sm font-bold text-slate-900">{result.holder_name ?? result.holder_did ?? '—'}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Issuer</span>
+                  <p className="mt-1 text-sm font-bold text-slate-900">{result.issuer_org ?? '—'}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Purpose</span>
+                  <p className="mt-1 text-sm font-bold text-slate-900">{result.purpose ?? 'Credential verification'}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Issued</span>
+                  <p className="mt-1 text-sm font-bold text-slate-900">
+                    {result.issued_at ? new Date(result.issued_at).toLocaleDateString() : '—'}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Expiry</span>
+                  <p className="mt-1 text-sm font-bold text-slate-900">{result.expiry_date ?? 'No expiry'}</p>
+                </div>
+              </div>
+
+              {/* Public claims (selective disclosure) */}
+              {Object.keys(result.public_claims ?? {}).length > 0 && (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-xs">
+                  <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Disclosed claims</span>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {Object.entries(result.public_claims).map(([k, v]) => (
+                      <span key={k} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-semibold text-slate-700">
+                        {k.replace(/_/g, ' ')}: {v}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!ok && result.reason && (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs font-semibold text-rose-700">
+                  {result.reason}
+                </div>
+              )}
+
+              {/* Integrity checks collapsible */}
+              <div className="pt-2">
+                <button
+                  onClick={() => setShowProof(!showProof)}
+                  className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
+                >
+                  <span>View integrity checks</span>
+                  <ChevronDownIcon className={`h-4 w-4 transition-transform ${showProof ? 'rotate-180' : ''}`} />
+                </button>
+                {showProof && (
+                  <div className="mt-3 space-y-1.5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs animate-fade-up">
+                    {Object.entries(result.checks ?? {}).map(([k, v]) => (
+                      <div key={k} className="flex items-center justify-between">
+                        <span className="font-mono text-slate-500">{k.replace(/_/g, ' ')}</span>
+                        <span className={`font-bold ${v ? 'text-emerald-600' : 'text-rose-600'}`}>{v ? 'pass' : 'fail'}</span>
+                      </div>
+                    ))}
+                    <p className="pt-1 text-[10px] text-slate-400">Credential: {result.credential_id ?? '—'}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

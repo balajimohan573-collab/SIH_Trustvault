@@ -52,13 +52,26 @@ Monorepo layout:
 cd backend
 py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe scripts\reset_db.py --yes     # seed 4 demo users
+.\.venv\Scripts\python.exe scripts\reset_db.py --yes     # wipe DB + storage (no users seeded)
+$env:TRUSTVAULT_ADMIN_PASSWORD = "AdminPass123!"          # bootstraps the guaranteed admin
 $env:RATE_LIMIT_MAX = "500"                               # room for the attack demo
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000
 ```
 
-Demo users (WebAuthn dev-fallback login):
-`admin@`, `issuer@`, `holder@`, `verifier@trustvault.example`.
+Account bootstrap: opening the API in dev creates the schema and the guaranteed
+admin from `TRUSTVAULT_ADMIN_EMAIL` / `TRUSTVAULT_ADMIN_PASSWORD` (see
+`app/main.py`). All other accounts are created by real registration.
+
+To seed a live demo board through real API flows, run:
+
+```powershell
+.\.venv\Scripts\python.exe test_e2e_acceptance.py
+```
+
+This creates `admin@`, `balaji@`, and `verifier@trustvault.example` (password
+`AcceptancePass123!`), issues a real credential, proves IDOR protection, a
+scoped access grant, public verification, and revocation persistence. Then
+log into the web UI with any of those accounts — no demo mode, no fake data.
 
 Postgres (optional, if Docker is running): `docker compose up -d` and switch
 `DATABASE_URL` in `backend/.env`.
@@ -85,7 +98,7 @@ npx hardhat run scripts/deploy.ts --network localhost   # smoke deploy
 
 ```powershell
 cd backend
-.\.venv\Scripts\python.exe -m pytest tests -v          # 23 V2 scenario tests
+.\.venv\Scripts\python.exe -m pytest tests -v          # 24 V2 scenario tests
 ```
 
 ## Demo runbooks

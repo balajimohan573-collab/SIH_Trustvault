@@ -18,9 +18,9 @@ from app.models import (
     AccessRequest,
     Asset,
     Credential,
-    Device,
     OfflineEvent,
     SecurityEvent,
+    TrustedDevice,
     User,
 )
 from app.schemas import DashboardSummary
@@ -53,7 +53,7 @@ def _identities(db: Session, agg: DashboardSummary, me: User) -> None:
         agg.identities = {
             "total_users": db.query(User).count(),
             "active_users": db.query(User).filter(User.status == "active").count(),
-            "registered_devices": db.query(Device).count(),
+            "registered_devices": db.query(TrustedDevice).count(),
         }
     else:
         agg.identities = {"my_did": me.did}
@@ -62,14 +62,14 @@ def _identities(db: Session, agg: DashboardSummary, me: User) -> None:
 def _credentials(db: Session, agg: DashboardSummary, me: User) -> None:
     if me.role in ("issuer", "admin"):
         payload = {
-            "issued_total": db.query(Credential).filter(Credential.issuer_id == me.id).count(),
+            "issued_total": db.query(Credential).filter(Credential.issuer_user_id == me.id).count(),
             "issued_active": db.query(Credential)
-            .filter(Credential.issuer_id == me.id, Credential.status == "active")
+            .filter(Credential.issuer_user_id == me.id, Credential.status == "active")
             .count(),
             "issued_revoked": db.query(Credential)
-            .filter(Credential.issuer_id == me.id, Credential.status == "revoked")
+            .filter(Credential.issuer_user_id == me.id, Credential.status == "revoked")
             .count(),
-            "types": _type_breakdown(db, Credential.issuer_id == me.id),
+            "types": _type_breakdown(db, Credential.issuer_user_id == me.id),
         }
     else:
         payload = {

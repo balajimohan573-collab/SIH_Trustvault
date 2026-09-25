@@ -1,20 +1,55 @@
+# TrustVault full stack: PostgreSQL + FastAPI backend + Vite/React frontend.
+# Never put real secrets here in production; use a .env file (see .env.example).
+
 services:
-  postgres:
+  db:
     image: postgres:16-alpine
-    container_name: trustvault-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: trustvault
-      POSTGRES_PASSWORD: trustvault_dev
+      POSTGRES_PASSWORD: trustvault
       POSTGRES_DB: trustvault
-    ports:
-      - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - trustvault_pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U trustvault -d trustvault"]
       interval: 5s
       timeout: 5s
       retries: 10
 
+  api:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://trustvault:trustvault@db:5432/trustvault
+      ADMIN_EMAIL: admin@trustvault.example
+      TRUSTVAULT_ADMIN_PASSWORD: ${TRUSTVAULT_ADMIN_PASSWORD:-change-me-in-prod}
+      TRUSTVAULT_MASTER_KEY: ${TRUSTVAULT_MASTER_KEY:?set a real master key in .env}
+      JWT_SECRET: ${JWT_SECRET:?set a real JWT secret in .env}
+      STORAGE_BACKEND: local
+      STORAGE_DIR: /data/storage
+      CORS_ORIGINS: '["http://localhost:5173","http://localhost"]'
+    volumes:
+      - trustvault_data:/data
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request as u; print(u.urlopen('http://localhost:8000/readiness', timeout=3).read().decode())\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+
 volumes:
-  pgdata:
+  trustvault_pgdata:
+  trustvault_data:

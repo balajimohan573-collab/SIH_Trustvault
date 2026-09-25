@@ -1,137 +1,184 @@
-import { useEffect, useState } from 'react'
-import { api, type Asset } from '../api'
-import { Badge, EmptyState, Notice, Panel, BtnPrimary, Select, decisionTone, cn } from './ui'
-import { CheckIcon, FileTextIcon, XIcon, AlertIcon, InfoIcon } from './icons'
+import { useCallback, useEffect, useState } from 'react'
+import { FileTextIcon, ShieldIcon } from './icons'
+import { Badge, EmptyState, Notice, Panel, Spinner } from './ui'
+import { dashboardApi, securityApi, type CurrentUser, type SecurityEvent } from '../api'
 
-type AuditRow = {
-  event_id: string
-  event_type: string
-  trust_score: number | null
-  decision: string | null
-  risk_signals: Record<string, any>
-  created_at: string
-  anchor: { tx_hash: string; chain: string; status: string } | null
+type Summary = {
+  user_role?: string
+  identities?: Record<string, any>
+  credentials?: Record<string, any>
+  assets?: Record<string, any>
+  pending_requests?: any[]
+  recent_activity?: any[]
+  trust?: Record<string, any>
+  technical?: { flags?: Record<string, any>; counts?: Record<string, number>; chain?: Record<string, any> }
 }
 
-export default function AuditPanel() {
-  const [assets, setAssets] = useState<Asset[]>([])
-  const [selected, setSelected] = useState('')
-  const [rows, setRows] = useState<AuditRow[]>([])
-  const [msg, setMsg] = useState<string | null>(null)
+const STATUS_TONE: Record<string, 'green' | 'amber' | 'red' | 'violet'> = {
+  ALLOWED: 'green',
+  VERIFIED: 'green',
+  BLOCKED: 'red',
+  DENIED: 'red',
+  STEP_UP: 'amber',
+  PENDING: 'amber',
+}
 
-  useEffect(() => {
-    api.get<Asset[]>('/assets').then(setAssets).catch(() => {})
+export default function AuditPanel({ user }: { user: CurrentUser }) {
+  const [summary, setSummary] = useState<Summary | null>(null)
+  const [events, setEvents] = useState<SecurityEvent[]>([])
+  const [err, setErr] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const isAdmin = user.role === 'admin'
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setErr(null)
+    try {
+      const [sum, evs] = await Promise.all([
+        dashboardApi.summary(true),
+        securityApi.events(),
+      ])
+      setSummary(sum as Summary)
+      setEvents([...evs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()))
+    } catch (e: any) {
+      setErr(e.message || 'Could not load audit data.')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  async function show() {
-    setMsg(null)
-    try {
-      setRows(await api.get<AuditRow[]>(`/audit/${selected}`))
-    } catch (e: any) {
-      setMsg(`Failed: ${e.message}`)
-      setRows([])
-    }
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const counts = summary?.technical?.counts ?? {}
+  const flags = summary?.technical?.flags ?? {}
+  const chain = summary?.technical?.chain ?? {}
+  const cred = summary?.credentials ?? {}
+  const iden = summary?.identities ?? {}
+
+  const kpis: { label: string; value: number | string; tone?: string }[] = []
+
+  if (isAdmin) {
+    kpis.push({ label: 'Total Users', value: iden.total_users ?? '—' })
+    kpis.push({ label: 'Registered Devices', value: iden.registered_devices ?? '—' })
+    kpis.push({ label: 'Credentials (all)', value: counts.credentials ?? '—' })
+    kpis.push({ label: 'Documents', value: counts.assets ?? '—' })
+    kpis.push({ label: 'Pending Requests', value: counts.pending_requests ?? '—' })
+  } else {
+    const totals = Object.keys(cred).length ? cred : undefined
+    kpis.push({ label: 'Held Credentials', value: totals?.held_total ?? '—' })
+    kpis.push({ label: 'Active', value: totals?.held_active ?? '—' })
+    kpis.push({ label: 'Revoked', value: totals?.held_revoked ?? '—' })
+    kpis.push({ label: 'Credentials across vault', value: counts.credentials ?? '—' })
+    kpis.push({ label: 'Documents across vault', value: counts.assets ?? '—' })
   }
 
   return (
-    <Panel
-      title="History"
-      subtitle="A permanent record of everything decided, permanently sealed"
-      icon={<FileTextIcon className="h-5 w-5" />}
-      help="Every decision here is sealed with a proof that cannot be changed afterwards. It is the official record if questions ever come up."
-    >
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Select value={selected} onChange={(e) => setSelected(e.target.value)} className="sm:max-w-xs">
-          <option value="">Select document…</option>
-          {assets.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name} ({a.id.slice(0, 8)}…)
-            </option>
-          ))}
-        </Select>
-        <BtnPrimary onClick={show} disabled={!selected}>
-          Show history
-        </BtnPrimary>
+    <div className="space-y-6 animate-fade-up">
+      <div>
+        <h2 className="text-xl font-bold tracking-tight text-slate-900">Security & Audit Overview</h2>
+        <p className="text-xs text-slate-500">
+          {isAdmin ? 'Platform-wide metrics, registries and live security events' : 'Your role-scoped counters and live security events'}
+        </p>
       </div>
 
-      {rows.length === 0 && selected && (
-        <div className="mt-5">
-          <EmptyState
-            icon={<FileTextIcon className="h-5 w-5" />}
-            title="Nothing recorded yet"
-            hint="Decisions for this document will appear here the moment they happen."
-          />
+      {err && <Notice tone="red">{err}</Notice>}
+
+      {loading && !summary ? (
+        <div className="flex items-center justify-center gap-2 py-20">
+          <Spinner className="h-5 w-5 text-brand-600" />
+          <span className="text-xs font-semibold text-slate-500">Loading audit data…</span>
         </div>
-      )}
-
-      <div className="mt-5 space-y-3">
-        {rows.map((r) => {
-          const tone = r.decision ? decisionTone(r.decision) : 'slate'
-          const Icon =
-            r.decision === 'ALLOW' ? CheckIcon : r.decision === 'STEP_UP' ? AlertIcon : r.decision === 'RESTRICTED' ? InfoIcon : XIcon
-          return (
-            <div key={r.event_id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300">
-              <div className="flex flex-wrap items-center gap-2">
-                <div
-                  className={cn(
-                    'grid h-7 w-7 place-items-center rounded-lg border',
-                    tone === 'green'
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
-                      : tone === 'amber'
-                        ? 'border-amber-200 bg-amber-50 text-amber-600'
-                        : tone === 'violet'
-                          ? 'border-violet-200 bg-violet-50 text-violet-600'
-                          : 'border-rose-200 bg-rose-50 text-rose-600',
-                  )}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                </div>
-                <span className="rounded-md border border-brand-200 bg-brand-50 px-1.5 py-0.5 font-mono text-[11px] text-brand-700">
-                  {r.event_type}
-                </span>
-                {r.decision && <Badge tone={tone}>{r.decision}</Badge>}
-                {r.trust_score !== null && (
-                  <span className="font-mono text-[11px] text-slate-500">security {r.trust_score}</span>
-                )}
-                <span className="ml-auto font-mono text-[10px] text-slate-500">
-                  {new Date(r.created_at).toLocaleString()}
-                </span>
+      ) : (
+        <>
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {kpis.map((k) => (
+              <div key={k.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-[11px] font-medium text-slate-500">{k.label}</p>
+                <p className={`mt-1 text-2xl font-bold ${k.tone ?? 'text-slate-900'}`}>{k.value}</p>
               </div>
+            ))}
+          </div>
 
-              {r.anchor && (
-                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                  <span className="text-[11px] text-slate-600">
-                    {r.anchor.status === 'anchored' ? 'Permanently sealed ✓' : 'Sealing pending…'}
-                  </span>
-                  <details className="group">
-                    <summary className="cursor-pointer font-mono text-[10px] text-slate-400 transition hover:text-slate-600">
-                      proof {r.anchor.tx_hash.slice(0, 14)}… ({r.anchor.chain})
-                    </summary>
-                    <p className="mt-1 max-w-md break-all font-mono text-[10px] text-slate-400">{r.anchor.tx_hash}</p>
-                  </details>
-                </div>
-              )}
-
-              {Object.keys(r.risk_signals ?? {}).length > 0 && (
-                <details className="mt-2 group">
-                  <summary className="cursor-pointer text-[11px] text-slate-500 transition hover:text-slate-700">
-                    Details
-                  </summary>
-                  <pre className="mt-2 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-2.5 font-mono text-[10px] leading-relaxed text-slate-500">
-                    {JSON.stringify(r.risk_signals, null, 2)}
-                  </pre>
-                </details>
-              )}
+          {/* Technical flags */}
+          <Panel title="Platform flags & registries" icon={<ShieldIcon className="h-5 w-5" />} subtitle="Read from live backend configuration">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 text-xs">
+                <p className="text-slate-500">Chain anchoring</p>
+                <p className={`mt-0.5 font-mono font-bold ${flags.chain_enabled ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  {flags.chain_enabled ? 'enabled' : 'disabled'}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 text-xs">
+                <p className="text-slate-500">Offline vault</p>
+                <p className={`mt-0.5 font-mono font-bold ${flags.offline_enabled ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  {flags.offline_enabled ? 'enabled' : 'disabled'}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 text-xs">
+                <p className="text-slate-500">Duress mode</p>
+                <p className={`mt-0.5 font-mono font-bold ${flags.duress_enabled ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  {flags.duress_enabled ? 'enabled' : 'disabled'}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 text-xs">
+                <p className="text-slate-500">QR expiry</p>
+                <p className="mt-0.5 font-mono font-bold text-slate-700">{flags.qr_expiry_minutes ?? '—'} min</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 text-xs">
+                <p className="text-slate-500">ML anomaly</p>
+                <p className={`mt-0.5 font-mono font-bold ${flags.ml_anomaly ? 'text-emerald-600' : 'text-slate-400'}`}>
+                  {flags.ml_anomaly ? 'enabled' : 'disabled'}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 text-xs">
+                <p className="text-slate-500">Audit registry</p>
+                <p className="mt-0.5 font-mono font-bold text-slate-500 truncate">{chain.audit_registry ?? 'not configured'}</p>
+              </div>
             </div>
-          )
-        })}
-      </div>
+          </Panel>
 
-      {msg && (
-        <Notice tone="red" className="mt-4">
-          {msg}
-        </Notice>
+          {/* Recent Security Events Table */}
+          <Panel title={isAdmin ? 'Recent security events (all users)' : 'My recent security events'} icon={<FileTextIcon className="h-5 w-5" />}>
+            {events.length === 0 ? (
+              <EmptyState icon={<FileTextIcon className="h-5 w-5" />} title="No events recorded" hint="Security events will appear here as activity happens." />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wider text-[10px]">
+                      <th className="pb-3 font-semibold">User</th>
+                      <th className="pb-3 font-semibold">Event</th>
+                      <th className="pb-3 font-semibold">Trust</th>
+                      <th className="pb-3 font-semibold">Time</th>
+                      <th className="pb-3 font-semibold text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {events.slice(0, 15).map((ev) => {
+                      const tone = STATUS_TONE[ev.decision ?? ''] ?? 'amber'
+                      return (
+                        <tr key={ev.id} className="hover:bg-slate-50/50">
+                          <td className="py-3.5 font-mono font-bold text-slate-700">{ev.user_id?.slice(0, 10)}…</td>
+                          <td className="py-3.5 text-slate-700">{ev.event_type.replace(/_/g, ' ')}</td>
+                          <td className="py-3.5 font-mono text-slate-500">{ev.trust_score ?? '—'}</td>
+                          <td className="py-3.5 font-mono text-slate-500">{new Date(ev.created_at).toLocaleString()}</td>
+                          <td className="py-3.5 text-right">
+                            <Badge tone={tone} dot>{ev.decision ?? ev.event_type}</Badge>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+        </>
       )}
-    </Panel>
+    </div>
   )
 }

@@ -185,3 +185,65 @@ def deny_request(
     # High-value decision: deny is finale, anchor it.
     audit.anchor(db, event_type="access_denied_by_owner", user_id=current.id)
     return {"id": req.id, "status": "denied"}
+
+
+@router.post("/grant", response_model=GrantOut)
+def create_direct_grant(
+    body: dict,
+    current: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Directly grant access to a verifier/employer."""
+    asset_id = body.get("asset_id") or body.get("credential_id")
+    recipient = body.get("recipient") or "verifier@trustvault.example"
+    purpose = body.get("purpose") or "Employment Verification"
+    duration_minutes = int(body.get("duration_minutes") or 60)
+
+    # Lookup recipient user if email/id provided
+    recipient_user = db.query(User).filter(User.email == recipient.lower()).first()
+    recipient_id = recipient_user.id if recipient_user else current.id
+
+    grant = AccessGrant(
+        asset_id=asset_id or "default-asset",
+        requester_id=recipient_id,
+        purpose=purpose,
+        granted_at=datetime.utcnow(),
+        expires_at=datetime.utcnow() + timedelta(minutes=duration_minutes),
+    )
+    db.add(grant)
+    db.commit()
+    db.refresh(grant)
+    log.info("Direct grant %s created by %s for %s", grant.id, current.id, recipient_id)
+    return GrantOut(
+        id=grant.id,
+        asset_id=grant.asset_id,
+        purpose=grant.purpose,
+        granted_at=grant.granted_at,
+        expires_at=grant.expires_at,
+    )
+
+
+@router.post("/grants/{grant_id}/revoke")
+@router.post("/{grant_id}/revoke")
+def revoke_grant(
+    grant_id: str,
+    current: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Revoke an active access grant immediately."""
+    grant = db.get(AccessGrant, grant_id)
+    if not grant:
+        # Also check if grant_id maps to an AccessRequest
+        req = db.get(AccessRequest, grant_id)
+        if req:
+            req.status = "denied"
+            req.decided_at = datetime.utcnow()
+            db.commit()
+            return {"id": req.id, "status": "revoked"}
+        return {"id": grant_id, "status": "revoked"}
+
+    # Delete or expire grant
+    grant.expires_at = datetime.utcnow() - timedelta(seconds=1)
+    db.commit()
+    log.info("Access grant %s revoked by %s", grant.id, current.id)
+    return {"id": grant.id, "status": "revoked"}

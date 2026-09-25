@@ -1,0 +1,9 @@
+.venv
+__pycache__
+*.pyc
+.env
+*.db
+*.db.bak*
+tests
+test_*.py
+.git

@@ -1,45 +1,82 @@
-import base64
+"""DB-backed session management.
+
+Replaces the in-memory demo store: sessions persist, are revocable, expire, and
+are auditable. The access JWT is the bearer token; the `Session` row is the
+source of truth checked on every authenticated request (see `deps.get_current_user`).
+"""
 import logging
-import threading
+from datetime import datetime, timedelta
+
+from sqlalchemy.orm import Session as SASession
+
+from app.core.config import get_settings
+from app.models import Session, User
 
 log = logging.getLogger("trustvault.sessions")
 
-_SESSION_TTL_SECONDS = 24 * 60 * 60
+
+def _now() -> datetime:
+    # Naive UTC to stay consistent with SQLite storage and the rest of the app
+    # (models use datetime.utcnow). Avoids offset-aware/naive comparison errors.
+    return datetime.utcnow()
 
 
-class SessionStore:
-    """In-memory session store with expiry. Sufficient for the MVP demo.
-
-    JWT is the primary session token; this store additionally tracks issued
-    sessions so the attack-simulation layer can replay/revoke them and so a
-    server-side revocation list can be enforced.
-    """
-
-    def __init__(self):
-        self._sessions: dict[str, dict] = {}
-        self._lock = threading.Lock()
-
-    def put(self, jti: str, payload: dict) -> None:
-        with self._lock:
-            self._sessions[jti] = payload
-
-    def get(self, jti: str) -> dict | None:
-        with self._lock:
-            return self._sessions.get(jti)
-
-    def revoke(self, jti: str) -> None:
-        with self._lock:
-            self._sessions.pop(jti, None)
-
-    def revoke_for_user(self, user_id: str) -> None:
-        with self._lock:
-            for jti in list(self._sessions):
-                if self._sessions[jti].get("user_id") == user_id:
-                    self._sessions.pop(jti, None)
-
-    def is_valid(self, jti: str) -> bool:
-        s = self.get(jti)
-        return s is not None
+def create_session(
+    db: SASession,
+    user: User,
+    jti: str,
+    ip_addr: str | None = None,
+    user_agent: str | None = None,
+) -> Session:
+    settings = get_settings()
+    row = Session(
+        user_id=user.id,
+        jti=jti,
+        expires_at=_now() + timedelta(hours=settings.session_ttl_hours),
+        ip_addr=ip_addr,
+        user_agent=user_agent,
+    )
+    db.add(row)
+    db.flush()
+    return row
 
 
-session_store = SessionStore()
+def get_session(db: SASession, jti: str) -> Session | None:
+    return db.query(Session).filter(Session.jti == jti).first()
+
+
+def is_valid_session(db: SASession, jti: str) -> bool:
+    row = get_session(db, jti)
+    if row is None:
+        return False
+    if row.revoked_at is not None:
+        return False
+    if row.expires_at < _now():
+        return False
+    row.last_seen_at = _now()
+    db.flush()
+    return True
+
+
+def revoke_session(db: SASession, jti: str, revoked_by: str | None = None) -> bool:
+    row = get_session(db, jti)
+    if row is None:
+        return False
+    row.revoked_at = _now()
+    row.revoked_by = revoked_by
+    db.flush()
+    log.info("Session %s revoked", jti)
+    return True
+
+
+def revoke_sessions_for_user(db: SASession, user_id: str, revoked_by: str | None = None) -> int:
+    rows = (
+        db.query(Session)
+        .filter(Session.user_id == user_id, Session.revoked_at.is_(None))
+        .all()
+    )
+    for row in rows:
+        row.revoked_at = _now()
+        row.revoked_by = revoked_by
+    db.flush()
+    return len(rows)

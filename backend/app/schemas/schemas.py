@@ -7,22 +7,23 @@ from pydantic import BaseModel, EmailStr, Field
 # ---------- Auth ----------
 class RegisterRequest(BaseModel):
     email: EmailStr
-    role: str = Field(
-        default="holder",
-        pattern="^(holder|issuer|verifier|admin|manager|auditor|user)$",
-    )
-
-
-class LoginStartRequest(BaseModel):
-    email: EmailStr
+    role: str = Field(default="holder", pattern="^(holder|issuer|verifier|admin)$")
 
 
 class RegisterStartRequest(BaseModel):
     email: EmailStr
-    role: str = Field(
-        default="holder",
-        pattern="^(holder|issuer|verifier|admin|manager|auditor|user)$",
-    )
+    role: str = Field(default="holder", pattern="^(holder|issuer|verifier|admin)$")
+
+
+class PasswordRegisterRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    full_name: str | None = Field(default=None, max_length=255)
+
+
+class PasswordLoginRequest(BaseModel):
+    email: EmailStr
+    password: str
 
 
 class PasskeyCompleteRequest(BaseModel):
@@ -32,8 +33,26 @@ class PasskeyCompleteRequest(BaseModel):
     label: str = "default"
 
 
+class LoginStartRequest(BaseModel):
+    email: EmailStr
+
+
 class DeviceRegisterRequest(BaseModel):
     label: str = "default"
+
+
+class PasswordChangeRequest(BaseModel):
+    old_password: str
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetCompleteRequest(BaseModel):
+    token: str
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 class TokenResponse(BaseModel):
@@ -43,24 +62,68 @@ class TokenResponse(BaseModel):
 
 
 # ---------- Credentials ----------
+class CredentialClaimIn(BaseModel):
+    key: str = Field(min_length=1, max_length=128)
+    value: str
+    claim_type: str = Field(default="string", max_length=32)
+    public: bool = False
+
+
 class CredentialIssueRequest(BaseModel):
-    holder_email: EmailStr
-    type: str
-    # Raw document bytes are hashed server-side during validation; payload may be a
-    # base64 doc or a freeform claim object.
+    holder_email: EmailStr | None = None
+    type: str = Field(min_length=1, max_length=128)
+    title: str | None = None
+    external_id: str | None = None
+    issue_date: str | None = None
+    expiry_date: str | None = None
+    # Structured claims (the authoritative digital record).
+    claims: list[CredentialClaimIn] = Field(default_factory=list)
+    # Raw document object (kept for the legacy "document" payload shape).
     document: dict[str, Any] = Field(default_factory=dict)
     document_base64: str | None = None
+
+
+class CredentialClaimOut(BaseModel):
+    key: str
+    value: str
+    claim_type: str = "string"
+    public: bool = False
+
+
+class CredentialFileOut(BaseModel):
+    id: str
+    original_filename: str
+    sha256: str
+    byte_size: int
+    content_type: str
+    detected_type: str
+    is_primary: bool
 
 
 class CredentialResponse(BaseModel):
     id: str
     type: str
-    hash: str
-    status: str
-    issuer_id: str
+    title: str | None = None
+    issuer_name: str | None = None
+    issuer_org_id: str
+    issuer_user_id: str
     holder_id: str
+    status: str
+    issue_date: str | None = None
+    expiry_date: str | None = None
+    external_id: str | None = None
+    claims_hash: str
+    hash: str | None = None
+    anchor_tx_hash: str | None = None
     issued_at: datetime
     revoked_at: datetime | None = None
+    suspended_at: datetime | None = None
+    claims: list[CredentialClaimOut] = Field(default_factory=list)
+    files: list[CredentialFileOut] = Field(default_factory=list)
+
+
+class ValidateEvidenceRequest(BaseModel):
+    content_type: str | None = None
 
 
 class VerifyResponse(BaseModel):
@@ -71,8 +134,74 @@ class VerifyResponse(BaseModel):
     purpose: str | None = None
 
 
+class PublicVerifyResponse(BaseModel):
+    valid: bool
+    result: str  # VERIFIED | INVALID | EXPIRED | REVOKED
+    status: str
+    credential_id: str | None = None
+    holder_did: str | None = None
+    holder_name: str | None = None
+    type: str | None = None
+    issuer_org: str | None = None
+    issued_at: datetime | None = None
+    expiry_date: str | None = None
+    public_claims: dict[str, str] = Field(default_factory=dict)
+    checks: dict[str, bool] = Field(default_factory=dict)
+    reason: str | None = None
+    purpose: str | None = None
+
+
 class RevokeRequest(BaseModel):
     reason: str | None = None
+
+
+class SuspendRequest(BaseModel):
+    reason: str | None = None
+
+
+# ---------- Organizations ----------
+class OrganizationApplyRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=255)
+    official_domain: str = Field(min_length=3, max_length=255)
+    org_identifier: str | None = Field(default=None, max_length=128)
+    evidence_uri: str | None = Field(default=None, max_length=512)
+
+
+class OrganizationOut(BaseModel):
+    id: str
+    name: str
+    official_domain: str
+    org_identifier: str | None = None
+    verification_status: str
+    verified_at: datetime | None = None
+    created_at: datetime
+
+
+class OrganizationDecideRequest(BaseModel):
+    approve: bool
+    note: str | None = None
+
+
+# ---------- Notification ----------
+class NotificationOut(BaseModel):
+    id: str
+    type: str
+    title: str
+    body: str
+    link: str | None = None
+    read: bool
+    created_at: datetime
+
+
+# ---------- Trusted devices ----------
+class TrustedDeviceOut(BaseModel):
+    id: str
+    label: str
+    browser: str | None = None
+    os: str | None = None
+    first_seen: datetime
+    last_seen: datetime
+    status: str
 
 
 # ---------- Assets ----------
@@ -95,14 +224,6 @@ class AssetCreatePolicyRequest(BaseModel):
     purpose: str
     expires_at: datetime | None = None
     min_trust: int = Field(default=0, ge=0, le=100)
-    # Policy-based location/time constraints (optional; users never enter GPS)
-    location_scope: str | None = Field(default=None, max_length=255)
-    location_strict: bool = Field(default=False)
-    time_start: str | None = Field(default=None, description="HH:MM (local)")
-    time_end: str | None = Field(default=None, description="HH:MM (local)")
-    time_zone: str | None = Field(default=None, max_length=64)
-    context_required: dict[str, Any] | None = Field(default=None)
-    # Policy-based location/time constraints (optional; users never enter GPS)
     location_scope: str | None = Field(default=None, max_length=255)
     location_strict: bool = Field(default=False)
     time_start: str | None = Field(default=None, description="HH:MM (local)")
@@ -111,11 +232,10 @@ class AssetCreatePolicyRequest(BaseModel):
     context_required: dict[str, Any] | None = Field(default=None)
 
 
-# ---------- Access ----------
+# ---------- Asset access (V2) ----------
 class AccessRequestIn(BaseModel):
     asset_id: str
     purpose: str
-    # Optional supporting context (policy-based, users never enter GPS).
     context: dict[str, Any] | None = Field(default=None)
 
 
@@ -142,15 +262,60 @@ class GrantOut(BaseModel):
     expires_at: datetime
 
 
+# ---------- Credential access (purpose-bound) ----------
+class CredentialAccessRequestIn(BaseModel):
+    credential_id: str
+    purpose: str = Field(min_length=3, max_length=255)
+    requested_claims: list[str] = Field(default_factory=list)
+    expires_minutes: int = Field(default=60, ge=5, le=4320)
+
+
+class CredentialAccessRequestOut(BaseModel):
+    id: str
+    credential_id: str
+    requester_id: str
+    purpose: str
+    requested_claims: list[str]
+    status: str
+    expires_at: datetime
+    created_at: datetime
+    decided_at: datetime | None = None
+
+
+class CredentialAccessDecision(BaseModel):
+    duration_minutes: int = Field(default=60, ge=5, le=4320)
+
+
+class CredentialAccessGrantOut(BaseModel):
+    id: str
+    credential_id: str
+    requester_id: str
+    purpose: str
+    allowed_claims: list[str]
+    status: str
+    granted_at: datetime
+    expires_at: datetime
+    revoked_at: datetime | None = None
+
+
+class CredentialContentOut(BaseModel):
+    credential_id: str
+    holder_did: str
+    type: str
+    issued_at: datetime | None = None
+    purpose: str
+    claims: dict[str, str]
+    granted_until: datetime
+
+
 # ---------- Trust ----------
-# V2 authoritative decision set.
 DECISION_VALUES = "^(ALLOW|STEP_UP|RESTRICTED|DENY)$"
 
 
 class TrustStateOut(BaseModel):
     user_id: str
     trust_score: int
-    decision: str = Field(pattern=DECISION_VALUES)  # ALLOW | STEP_UP | RESTRICTED | DENY
+    decision: str = Field(pattern=DECISION_VALUES)
     reasons: list[str]
     model_version: str
     timestamp: datetime
@@ -268,7 +433,7 @@ class AccessDecisionOut(BaseModel):
     human: str
     next_action: str | None = None
     scope: str | None = None
-    severity: str = "info"  # info | warning | critical
+    severity: str = "info"
     trust_score: int | None = None
     reasons: list[str] = Field(default_factory=list)
     reasons_human: list[AccessDecisionReason] = Field(default_factory=list)

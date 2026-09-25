@@ -25,6 +25,7 @@ backend/storage/*
 !backend/storage/.gitkeep
 backend/*.sqlite
 backend/*.db
+backend/*.db.bak*
 
 # --- Hardhat ---
 contracts/artifacts/

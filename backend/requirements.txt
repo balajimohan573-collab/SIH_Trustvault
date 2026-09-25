@@ -6,6 +6,7 @@ pydantic==2.10.4
 pydantic-settings==2.7.1
 email-validator==2.2.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1  # passlib 1.7.4 is incompatible with bcrypt >= 4.1 (wrap-bug detection)
 cryptography==44.0.0
 python-jose[cryptography]==3.3.0
 webauthn==2.4.0
@@ -14,6 +15,8 @@ httpx==0.28.1
 scikit-learn==1.6.0
 numpy==2.2.1
 web3==7.7.0
+# QR image rendering for the public verification page
+qrcode[pil]==8.0
 # Optional: postgres driver for the docker-compose db
 psycopg2-binary==2.9.10
 

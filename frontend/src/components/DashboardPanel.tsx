@@ -95,7 +95,7 @@ export default function DashboardPanel() {
     setBusy(true)
     setDMsg(null)
     try {
-      await recoveryApi.request('replacement device (demo)')
+      await recoveryApi.request('replacement device')
       setDMsg('Recovery request queued for approval — recorded as a security event.')
       await loadRecovery()
     } catch (e: any) {

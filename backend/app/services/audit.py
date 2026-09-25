@@ -1,7 +1,8 @@
 """Audit anchoring queue.
 
-Stage 6 wires the actual Sepolia transaction. Until then anchors are recorded
-as `pending` rows so every high-value event is captured and promotable.
+Stage 6 wires the actual on-chain transaction on the configured network. Until
+then anchors are recorded as `pending` rows so every high-value event is
+captured and promotable.
 """
 import logging
 import uuid
@@ -9,6 +10,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models import AuditAnchor, SecurityEvent
 
 log = logging.getLogger("trustvault.audit")
@@ -57,7 +59,7 @@ def anchor(
         id=str(uuid.uuid4()),
         event_id=event_id,
         tx_hash="pending",
-        chain="sepolia",
+        chain=get_settings().chain_network,
         anchored_at=datetime.now(timezone.utc),
     )
     db.add(anchor_row)

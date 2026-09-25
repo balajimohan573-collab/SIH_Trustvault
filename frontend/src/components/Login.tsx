@@ -1,173 +1,326 @@
 import { useState } from 'react'
-import { api, authApi, setAuth } from '../api'
-import { BadgeCheckIcon, ChevronRightIcon, FingerprintIcon, LockIcon, ShieldIcon } from './icons'
-import { BtnPrimary, Field, Input, Notice, Spinner, cn, Tip } from './ui'
-import LanguageSwitcher from './LanguageSwitcher'
-import { useLang, tr } from '../i18n'
+import { startRegistration, startAuthentication } from '@simplewebauthn/browser'
+import { authApi, setAuth, type CurrentUser } from '../api'
+import { BadgeCheckIcon, FingerprintIcon, LockIcon, ShieldIcon } from './icons'
+import { BtnPrimary, Field, Input, Notice, Spinner } from './ui'
 
-const DEMO_ACCOUNTS = [
-  { email: 'issuer@trustvault.example', label: 'Issuer', desc: 'A school, university or office that adds certificates', dot: 'bg-sky-500', tip: 'Sign in as Issuer to add, verify and cancel certificates.' },
-  { email: 'holder@trustvault.example', label: 'Holder', desc: 'A person with documents and certificates', dot: 'bg-emerald-500', tip: 'Sign in as Holder to store documents, check your security, and allow or block who sees them.' },
-  { email: 'verifier@trustvault.example', label: 'Verifier', desc: 'An employer or office asking to see a document', dot: 'bg-violet-500', tip: 'Sign in as Verifier to ask for a document and get it when the owner allows.' },
-  { email: 'admin@trustvault.example', label: 'Admin', desc: 'Looks after the whole platform', dot: 'bg-rose-500', tip: 'Sign in as Admin to see everything and act only in special cases, always recorded.' },
-]
+type Mode = 'login' | 'register' | 'reset'
 
-const FEATURES = [
-  { icon: <BadgeCheckIcon className="h-4 w-4" />, title: 'Verified once', text: 'Schools and offices certify you just one time.', tip: 'After that every check is instant — the system re-checks safety itself, live.' },
-  { icon: <LockIcon className="h-4 w-4" />, title: 'Everything stays private', text: 'Your documents are locked — nobody reads them but you.', tip: 'Only a safe fingerprint is recorded. The actual document stays with you.' },
-  { icon: <FingerprintIcon className="h-4 w-4" />, title: 'Watches over you', text: 'It spots anything unusual and keeps you safe.', tip: 'New devices, odd timings, too many requests — each one is caught and explained in plain words.' },
-  { icon: <ShieldIcon className="h-4 w-4" />, title: 'Proof that cannot be changed', text: 'A permanent, tamper-proof record of every decision.', tip: 'Every important action is sealed permanently, so no one can deny or alter it later.' },
-]
-
-export default function Login({ onLogin }: { onLogin: (user: any) => void }) {
-  const [email, setEmail] = useState(DEMO_ACCOUNTS[1].email)
+export default function Login({ onLogin }: { onLogin: (user: CurrentUser) => void }) {
+  const [mode, setMode] = useState<Mode>('login')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [resetToken, setResetToken] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const lang = useLang()
+  const [info, setInfo] = useState<string | null>(null)
 
-  async function signIn(mail: string) {
+  function enter(res: { access_token: string; user: CurrentUser }) {
+    setAuth(res.access_token, res.user)
+    onLogin(res.user)
+  }
+
+  async function handleLogin() {
     setBusy(true)
     setError(null)
     try {
-      const res = await authApi.devLogin(mail)
-      setAuth(res.access_token, res.user)
-      const me = await api.get<any>('/auth/me')
-      setAuth(res.access_token, me)
-      onLogin(me)
+      enter(await authApi.login(email, password))
     } catch (e: any) {
-      setError(e?.message ?? 'Login failed')
+      setError(e.message || 'Sign in failed.')
     } finally {
       setBusy(false)
     }
   }
 
+  async function handleRegister() {
+    setBusy(true)
+    setError(null)
+    try {
+      enter(await authApi.register(email, password, fullName || undefined))
+    } catch (e: any) {
+      setError(e.message || 'Registration failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handlePasskeyLogin() {
+    setBusy(true)
+    setError(null)
+    try {
+      const { options } = await authApi.loginStart(email)
+      const credential = await startAuthentication(options)
+      enter(await authApi.loginComplete(email, credential))
+    } catch (e: any) {
+      setError(e.message || 'Passkey sign in failed. Is a passkey registered for this account?')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handlePasskeyRegister() {
+    setBusy(true)
+    setError(null)
+    try {
+      const { options } = await authApi.registerStart(email)
+      const credential = await startRegistration(options)
+      enter(await authApi.registerComplete(email, credential))
+    } catch (e: any) {
+      setError(e.message || 'Passkey registration failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleResetRequest() {
+    setBusy(true)
+    setError(null)
+    setInfo(null)
+    try {
+      const r = await authApi.resetRequest(email)
+      if (r.reset_token) {
+        setInfo(`Reset token generated for ${email}: ${r.reset_token.slice(0, 12)}… — contact your administrator in production.`)
+        setResetToken(r.reset_token)
+      } else {
+        setInfo('If that account exists, a reset instruction was issued. In this development build the token is delivered to the account owner.')
+        setMode('login')
+      }
+    } catch (e: any) {
+      setError(e.message || 'Reset request failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleResetComplete() {
+    setBusy(true)
+    setError(null)
+    try {
+      await authApi.resetComplete(resetToken, password)
+      setInfo('Password updated. Sign in with your new password.')
+      setPassword('')
+      setResetToken('')
+      setMode('login')
+    } catch (e: any) {
+      setError(e.message || 'Reset failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const footerRow = (
+    <div className="mt-5 flex items-center gap-2 text-xs">
+      {mode === 'login' ? (
+        <>
+          <button type="button" onClick={() => setMode('register')} className="font-bold text-brand-600 hover:text-brand-700">
+            Create an account
+          </button>
+          <span className="text-slate-300">·</span>
+          <button type="button" onClick={() => setMode('reset')} className="font-semibold text-slate-500 hover:text-slate-700">
+            Forgot password?
+          </button>
+        </>
+      ) : mode === 'register' ? (
+        <button type="button" onClick={() => setMode('login')} className="font-bold text-brand-600 hover:text-brand-700">
+          Back to sign in
+        </button>
+      ) : (
+        <button type="button" onClick={() => setMode('login')} className="font-bold text-brand-600 hover:text-brand-700">
+          Back to sign in
+        </button>
+      )}
+    </div>
+  )
+
   return (
-    <div className="relative min-h-screen px-4 py-10 sm:px-6">
-      <div className="mx-auto max-w-5xl">
-        <div className="flex justify-end pb-3">
-          <LanguageSwitcher />
-        </div>
-        <div className="grid w-full overflow-hidden rounded-3xl border border-ink-700 bg-white shadow-xl shadow-slate-200/70 animate-fade-up lg:grid-cols-[1.05fr_1fr]">
-        <div className="relative hidden flex-col justify-between bg-gradient-to-br from-rose-50 via-white to-white p-10 lg:flex">
-          <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-rose-500/10 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-10 h-56 w-56 rounded-full bg-brand-500/10 blur-3xl" />
-
-          <div className="relative flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-rose-600 shadow-lg shadow-brand-600/25">
-              <ShieldIcon className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <p className="text-lg font-bold tracking-tight text-slate-900">TrustVault</p>
-              <p className="text-xs text-slate-500">{tr(lang, 'tagline')}</p>
-            </div>
-          </div>
-
-          <div className="relative space-y-5">
-            <p className="text-2xl font-bold leading-snug tracking-tight text-slate-900">
-              Your documents, your
-              <br />
-              certificates, your control —
-              <br />
-              all in one safe place.
-            </p>
-            <div className="space-y-3.5">
-              {FEATURES.map((f) => (
-                <Tip key={f.title} label={f.tip} side="right">
-                  <div className="flex cursor-help items-start gap-3 rounded-xl border border-ink-700 bg-white/80 p-3 shadow-sm">
-                    <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-brand-100 bg-brand-50 text-brand-600">
-                      {f.icon}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">{f.title}</p>
-                      <p className="text-xs leading-relaxed text-slate-500">{f.text}</p>
-                    </div>
-                  </div>
-                </Tip>
-              ))}
-            </div>
-          </div>
-
-          <p className="relative text-[11px] text-slate-400">
-            Demo build · runs free on the Sepolia test network
-          </p>
-        </div>
-
-        <div className="p-8 sm:p-12">
-          <div className="lg:hidden">
-            <div className="mb-6 flex items-center gap-3">
-              <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-rose-600 shadow-lg shadow-brand-600/25">
-                <ShieldIcon className="h-5 w-5 text-white" />
+    <div className="relative min-h-screen px-4 py-10 sm:px-6 flex items-center justify-center bg-slate-50">
+      <div className="w-full max-w-5xl">
+        <div className="grid w-full overflow-hidden rounded-3xl border border-ink-700 bg-white shadow-2xl animate-fade-up lg:grid-cols-[1.05fr_1fr]">
+          {/* Left Decorative Branding Box */}
+          <div className="relative hidden flex-col justify-between bg-gradient-to-br from-rose-50 via-white to-brand-50 p-10 lg:flex">
+            <div className="relative flex items-center gap-3">
+              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-rose-600 shadow-lg shadow-brand-600/25 text-white">
+                <ShieldIcon className="h-7 w-7" />
               </div>
               <div>
-                <p className="text-base font-bold tracking-tight text-slate-900">TrustVault</p>
-                <p className="text-[11px] text-slate-500">{tr(lang, 'tagline')}</p>
+                <p className="text-xl font-bold tracking-tight text-slate-900">TRUSTVAULT</p>
+                <p className="text-xs font-medium text-slate-500">Verify once. Control access everywhere.</p>
               </div>
             </div>
+
+            <div className="relative space-y-6">
+              <h2 className="text-3xl font-extrabold leading-snug tracking-tight text-slate-900">
+                Your credentials.
+                <br />
+                Your data.
+                <br />
+                <span className="text-brand-600">Your control.</span>
+              </h2>
+
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 rounded-2xl border border-slate-200/80 bg-white/80 p-3.5 shadow-sm">
+                  <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600">
+                    <BadgeCheckIcon className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-800">Verify once</p>
+                    <p className="text-[11px] text-slate-500">Verified by issuers, instantly shareable with verifiers.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 rounded-2xl border border-slate-200/80 bg-white/80 p-3.5 shadow-sm">
+                  <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600">
+                    <LockIcon className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-800">Real-time Trust Protection</p>
+                    <p className="text-[11px] text-slate-500">Catches suspicious devices and requests automatically.</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 rounded-2xl border border-slate-200/80 bg-white/80 p-3.5 shadow-sm">
+                  <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600">
+                    <FingerprintIcon className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-800">Passwordless passkeys</p>
+                    <p className="text-[11px] text-slate-500">WebAuthn-backed sign in with your device fingerprint.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <p className="relative text-[11px] text-slate-400">Production-oriented identity & credential platform</p>
           </div>
 
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">Sign in to get started</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Pick a role below to walk the security flow, or type your own demo email.
-          </p>
+          {/* Right Form Box */}
+          <div className="p-8 sm:p-10 flex flex-col justify-center">
+            <div className="lg:hidden mb-6 flex items-center gap-3">
+              <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-rose-600 text-white shadow-md">
+                <ShieldIcon className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-lg font-bold tracking-tight text-slate-900">TRUSTVAULT</p>
+                <p className="text-[11px] text-slate-500">Verify once. Control access everywhere.</p>
+              </div>
+            </div>
 
-          <form
-            className="mt-6 space-y-3"
-            onSubmit={(e) => {
-              e.preventDefault()
-              signIn(email)
-            }}
-          >
-            <Field label="Email" hint="demo login (no password needed)">
-              <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@trustvault.example" />
-            </Field>
-            <BtnPrimary className="w-full" disabled={busy}>
-              {busy && <Spinner />}
-              {busy ? 'Signing in…' : 'Sign in'}
-            </BtnPrimary>
-          </form>
+            {mode === 'login' && (
+              <>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900">Sign in to your account</h1>
+                <p className="mt-1 text-xs text-slate-500">Use your password, or a passkey if you registered one.</p>
 
-          <div className="my-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-ink-700" />
-            <span className="text-[11px] uppercase tracking-widest text-slate-400">or try a demo role</span>
-            <div className="h-px flex-1 bg-ink-700" />
-          </div>
-
-          <div className="space-y-2">
-            {DEMO_ACCOUNTS.map((a) => (
-              <Tip key={a.email} label={a.tip} side="bottom">
-                <button
-                  disabled={busy}
-                  className={cn(
-                    'group flex w-full items-center gap-3 rounded-xl border border-ink-700 bg-white px-4 py-3 text-left shadow-sm transition',
-                    'hover:border-brand-400 hover:bg-brand-50/60 disabled:cursor-wait disabled:opacity-60',
-                  )}
-                  onClick={() => signIn(a.email)}
+                <form
+                  className="mt-6 space-y-3.5"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    handleLogin()
+                  }}
                 >
-                  <span className={cn('h-2 w-2 shrink-0 rounded-full', a.dot)} />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-slate-800">{a.label}</span>
-                      <span className="font-mono text-[10px] text-slate-500">{a.email}</span>
-                    </span>
-                    <span className="mt-0.5 block truncate text-xs text-slate-500">{a.desc}</span>
-                  </span>
-                  <ChevronRightIcon className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-brand-600" />
-                </button>
-              </Tip>
-            ))}
+                  <Field label="Email address">
+                    <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required />
+                  </Field>
+                  <Field label="Password">
+                    <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Your password" required />
+                  </Field>
+                  <BtnPrimary className="w-full justify-center py-2.5" disabled={busy}>
+                    {busy && <Spinner />}
+                    {busy ? 'Signing in…' : 'Sign In'}
+                  </BtnPrimary>
+                </form>
+
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={handlePasskeyLogin}
+                    disabled={busy || !email}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 py-2.5 text-xs font-bold text-slate-800 transition hover:bg-slate-100 disabled:opacity-50"
+                  >
+                    {busy ? <Spinner /> : <FingerprintIcon className="h-4 w-4 text-brand-600" />}
+                    {busy ? 'Authenticating…' : 'Sign in with Passkey'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {mode === 'register' && (
+              <>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900">Create your account</h1>
+                <p className="mt-1 text-xs text-slate-500">
+                  New accounts sign in as <b>holder</b>. Issuers apply for organization verification after signing in.
+                </p>
+
+                <form
+                  className="mt-6 space-y-3.5"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    handleRegister()
+                  }}
+                >
+                  <Field label="Full name" hint="optional">
+                    <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your name" />
+                  </Field>
+                  <Field label="Email address">
+                    <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required />
+                  </Field>
+                  <Field label="Password" hint="min 8 characters">
+                    <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Choose a password" required minLength={8} />
+                  </Field>
+                  <BtnPrimary className="w-full justify-center py-2.5" disabled={busy}>
+                    {busy && <Spinner />}
+                    {busy ? 'Creating account…' : 'Create account'}
+                  </BtnPrimary>
+                </form>
+
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={handlePasskeyRegister}
+                    disabled={busy || !email}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 py-2.5 text-xs font-bold text-slate-800 transition hover:bg-slate-100 disabled:opacity-50"
+                  >
+                    {busy ? <Spinner /> : <FingerprintIcon className="h-4 w-4 text-brand-600" />}
+                    {busy ? 'Creating passkey…' : 'Register with a Passkey'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {mode === 'reset' && (
+              <>
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900">Reset your password</h1>
+                <p className="mt-1 text-xs text-slate-500">Request a reset token, then set a new password.</p>
+
+                {!resetToken ? (
+                  <div className="mt-6 space-y-3.5">
+                    <Field label="Account email">
+                      <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required />
+                    </Field>
+                    <BtnPrimary className="w-full justify-center py-2.5" onClick={handleResetRequest} disabled={busy || !email}>
+                      {busy && <Spinner />}
+                      {busy ? 'Requesting…' : 'Request reset token'}
+                    </BtnPrimary>
+                  </div>
+                ) : (
+                  <div className="mt-6 space-y-3.5">
+                    <Field label="New password" hint="min 8 characters">
+                      <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Choose a new password" required minLength={8} />
+                    </Field>
+                    <BtnPrimary className="w-full justify-center py-2.5" onClick={handleResetComplete} disabled={busy || !password}>
+                      {busy && <Spinner />}
+                      {busy ? 'Updating…' : 'Set new password'}
+                    </BtnPrimary>
+                  </div>
+                )}
+              </>
+            )}
+
+            {error && <Notice tone="red" className="mt-4">{error}</Notice>}
+            {info && <Notice tone="green" className="mt-4">{info}</Notice>}
+
+            <div className="mt-2">{footerRow}</div>
           </div>
-
-          <Notice tone="slate" className="mt-6">
-            <span className="font-medium">Why demo roles?</span> They let the whole security flow run without extra
-            hardware. In the real version, people sign in on their own device with one touch.
-          </Notice>
-
-          {error && (
-            <Notice tone="red" className="mt-3">
-              {error}
-            </Notice>
-          )}
-        </div>
         </div>
       </div>
     </div>

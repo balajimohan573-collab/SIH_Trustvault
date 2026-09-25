@@ -11,14 +11,14 @@
 from datetime import datetime, timedelta
 
 from app.db.session import SessionLocal
-from app.models import Credential, Device
+from app.models import Credential, TrustedDevice
 
 
 def _latest_device_status(db, user_id: str) -> str:
     d = (
-        db.query(Device)
-        .filter(Device.user_id == user_id)
-        .order_by(Device.last_seen.desc())
+        db.query(TrustedDevice)
+        .filter(TrustedDevice.user_id == user_id)
+        .order_by(TrustedDevice.last_seen.desc())
         .first()
     )
     return d.status
@@ -48,7 +48,7 @@ def test_new_device_steps_up(seeded_flow):
 
         v = db.query(User).filter(User.email == "verifier@trustvault.example").first()
         db.add(
-            Device(
+            TrustedDevice(
                 user_id=v.id,
                 device_key_id="unseen-yubikey-001",
                 label="sneakernet",

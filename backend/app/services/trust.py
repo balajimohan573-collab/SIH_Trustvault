@@ -94,12 +94,12 @@ def _score_identity(user_flags: dict[str, Any]) -> tuple[float, list[str]]:
 def _score_device(device_flags: dict[str, Any]) -> tuple[float, list[str]]:
     reasons: list[str] = []
     status = device_flags.get("status")
-    if status == "revoked":
+    if status == "revoked" or device_flags.get("revoked"):
         return 0.0, ["DEVICE_REVOKED"]
+    if status in ("trusted", "active"):
+        return 100.0, ["KNOWN_DEVICE"]
     if status in ("unknown", "new") or device_flags.get("novel"):
         return 45.0, ["NEW_DEVICE"]
-    if status == "active":
-        return 100.0, ["KNOWN_DEVICE"]
     return 50.0, ["NO_DEVICE_TRACKING"]
 
 

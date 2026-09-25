@@ -42,3 +42,17 @@ def trust_state(
         components=state.components,
         ml_signal=state.ml_signal,
     )
+
+
+@router.post("/{user_id}/simulate")
+def simulate_trust(
+    user_id: str,
+    mode: str = "normal",  # normal | step_up | blocked
+    current: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Simulate suspicious activity / risk state changes for demonstration."""
+    raise HTTPException(
+        status_code=410,
+        detail="Simulation is not allowed in the real system. Read your live trust state at GET /trust/{user_id}.",
+    )

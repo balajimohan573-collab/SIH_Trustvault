@@ -1,186 +1,277 @@
-import { useEffect, useState } from 'react'
-import { api, type AccessRequest, type Asset } from '../api'
-import { Badge, EmptyState, Field, Notice, Panel, BtnPrimary, Input, Select, SpeakerButton, cn } from './ui'
-import { ClockIcon, KeyIcon, UserIcon } from './icons'
-import { useLang, tr, speak } from '../i18n'
-
-const BIG = {
-  allow: {
-    icon: '✓',
-    active: 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30',
-    hit: 'allow_hit',
-  },
-  ask_again: {
-    icon: '⟳',
-    active: 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/30',
-    hit: 'ask_again_hit',
-  },
-  block: {
-    icon: '✕',
-    active: 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/30',
-    hit: 'block_hit',
-  },
-} as const
+import { useCallback, useEffect, useState } from 'react'
+import {
+  assetAccessApi,
+  credentialAccessApi,
+  credentialsApi,
+  type Credential,
+  type CredentialAccessGrant,
+  type CredentialAccessRequest,
+} from '../api'
+import { BadgeCheckIcon, KeyIcon, ShieldIcon } from './icons'
+import { Badge, BtnGhost, BtnPrimary, EmptyState, Field, Input, Notice, Panel, Select } from './ui'
 
 export default function AccessPanel() {
-  const [assets, setAssets] = useState<Asset[]>([])
-  const [requests, setRequests] = useState<AccessRequest[]>([])
-  const [reqAsset, setReqAsset] = useState('')
-  const [reqPurpose, setReqPurpose] = useState('employment')
-  const [msg, setMsg] = useState<{ tone: 'green' | 'red' | 'amber' | 'slate'; text: string } | null>(null)
-  const lang = useLang()
+  const [msg, setMsg] = useState<{ tone: 'green' | 'red' | 'amber'; text: string } | null>(null)
+  const [creds, setCreds] = useState<Credential[]>([])
 
-  async function refresh() {
-    setAssets(await api.get<Asset[]>('/assets'))
-    setRequests(await api.get<AccessRequest[]>('/access'))
-  }
+  // Requester form
+  const [credId, setCredId] = useState('')
+  const [purpose, setPurpose] = useState('Employment verification')
+  const [claimKeys, setClaimKeys] = useState('')
+  const [expiry, setExpiry] = useState('60')
 
-  useEffect(() => {
-    refresh().catch(() => {})
+  // Lists
+  const [incoming, setIncoming] = useState<CredentialAccessRequest[]>([])
+  const [outgoing, setOutgoing] = useState<CredentialAccessRequest[]>([])
+  const [grants, setGrants] = useState<CredentialAccessGrant[]>([])
+  const [holderGrants, setHolderGrants] = useState<CredentialAccessGrant[]>([])
+  const [assetIncoming, setAssetIncoming] = useState<any[]>([])
+
+  const notify = (text: string, tone: 'green' | 'red' | 'amber' = 'green') => setMsg({ tone, text })
+  const credMap = new Map(creds.map((c) => [c.id, c.title ?? c.type]))
+
+  const load = useCallback(async () => {
+    try {
+      setIncoming(await credentialAccessApi.requests('incoming'))
+    } catch { /* role-gated view */ }
+    try {
+      setOutgoing(await credentialAccessApi.requests('outgoing'))
+    } catch { /* no-op */ }
+    try {
+      setGrants(await credentialAccessApi.grants())
+    } catch { /* no-op */ }
+    try {
+      setHolderGrants(await credentialAccessApi.grantsAll())
+    } catch { /* no-op */ }
+    try {
+      setAssetIncoming(await assetAccessApi.incoming())
+    } catch { /* no-op */ }
   }, [])
 
-  async function requestAccess() {
+  useEffect(() => {
+    load()
+    credentialsApi.list().then(setCreds).catch(() => {})
+  }, [load])
+
+  async function submitRequest() {
+    setMsg(null)
+    if (!credId.trim() || !purpose.trim()) {
+      notify('Credential ID and purpose are required.', 'red')
+      return
+    }
+    const claims = claimKeys
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean)
+    try {
+      await credentialAccessApi.request(credId.trim(), purpose.trim(), claims, Number(expiry) || 60)
+      notify('Purpose-bound access request created. The holder must approve it before you can read the credential.')
+      setCredId('')
+      setClaimKeys('')
+      await load()
+    } catch (e: any) {
+      notify(e.message || 'Request failed.', 'red')
+    }
+  }
+
+  async function decide(id: string, approve: boolean) {
     setMsg(null)
     try {
-      await api.post('/access/request', { asset_id: reqAsset, purpose: reqPurpose })
-      setMsg({ tone: 'green', text: `Your request was sent to the document owner.` })
-      await refresh()
+      if (approve) await credentialAccessApi.approve(id, 60)
+      else await credentialAccessApi.deny(id)
+      notify(approve ? 'Access approved — the requester can now read the allowed claims.' : 'Access request denied.')
+      await load()
     } catch (e: any) {
-      setMsg({
-        tone: 'red',
-        text: `Request rejected: ${typeof e.detail === 'object' ? JSON.stringify(e.detail) : e.message}`,
-      })
+      notify(e.message || 'Decision failed.', 'red')
     }
   }
 
-  async function decide(id: string, d: 'approve' | 'deny', minutes = 30) {
+  async function revokeGrant(id: string) {
     setMsg(null)
-    const r = await api
-      .post(`/access/${id}/${d}`, { decision: d, duration_minutes: d === 'approve' ? minutes : 30 })
-      .catch((e: any) => {
-        setMsg({ tone: 'red', text: `${d} failed: ${e.message}` })
-        return null
-      })
-    if (r) {
-      setMsg(
-        d === 'approve'
-          ? { tone: 'green', text: `Allowed — they can view it for ${minutes} minutes.` }
-          : { tone: 'amber', text: 'Blocked — the request is closed.' },
-      )
+    try {
+      await credentialAccessApi.revokeGrant(id)
+      notify('Grant revoked. The requester can no longer read this credential.')
+      await load()
+    } catch (e: any) {
+      notify(e.message || 'Revoke failed.', 'red')
     }
-    await refresh()
   }
 
-  async function bigTap(r: AccessRequest, kind: keyof typeof BIG) {
-    const minutes = Number((document.getElementById(`dur-${r.id}`) as HTMLInputElement)?.value ?? 30)
-    if (kind === 'allow') await decide(r.id, 'approve', minutes)
-    else await decide(r.id, 'deny', minutes)
-    speak(tr(lang, BIG[kind].hit), lang)
+  async function assetDecide(id: string, approve: boolean) {
+    setMsg(null)
+    try {
+      if (approve) await assetAccessApi.approve(id, 60)
+      else await assetAccessApi.deny(id)
+      notify(approve ? 'Asset access approved.' : 'Asset access denied.')
+      await load()
+    } catch (e: any) {
+      notify(e.message || 'Decision failed.', 'red')
+    }
   }
 
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-      <Panel
-        title="Ask to view a document"
-        subtitle="Tell the owner why you need it — they decide"
-        icon={<KeyIcon className="h-5 w-5" />}
-      >
-        <div className="space-y-3.5">
-          <Field label="Document" hint="the document you need">
-            <Select value={reqAsset} onChange={(e) => setReqAsset(e.target.value)}>
-              <option value="">Select document…</option>
-              {assets.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} ({a.id.slice(0, 8)}…)
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Why I need it" hint="e.g. job application, verification">
-            <Input value={reqPurpose} onChange={(e) => setReqPurpose(e.target.value)} placeholder="purpose" />
-          </Field>
-          <BtnPrimary className="w-full" onClick={requestAccess} disabled={!reqAsset}>
-            Ask for access
-          </BtnPrimary>
-          {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
-        </div>
-      </Panel>
+    <div className="space-y-6 animate-fade-up">
+      <div>
+        <h2 className="text-xl font-bold tracking-tight text-slate-900">Access Requests & Shared Permissions</h2>
+        <p className="text-xs text-slate-500">
+          Request purpose-bound credential access, approve requests on your credentials, and revoke grants.
+        </p>
+      </div>
 
-      <Panel
-        title="Who is asking"
-        subtitle="Allow, ask again, or block — one tap each"
-        icon={<UserIcon className="h-5 w-5" />}
-      >
-        {requests.length === 0 ? (
-          <EmptyState
-            icon={<UserIcon className="h-5 w-5" />}
-            title="No requests right now"
-            hint="When someone asks to see one of your documents, it shows up here for you to allow, ask again, or block."
-          />
-        ) : (
-          <div className="space-y-3">
-            {requests.map((r) => (
-              <div key={r.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-md border border-brand-200 bg-brand-50 px-1.5 py-0.5 font-mono text-[11px] text-brand-700">
-                    {r.asset_id.slice(0, 8)}…
-                  </span>
-                  <span className="text-sm font-medium text-slate-800">{r.purpose}</span>
-                  <span className="ml-auto">
-                    <Badge tone={r.status === 'approved' ? 'green' : r.status === 'denied' ? 'red' : 'slate'} dot>
-                      {r.status === 'approved' ? tr(lang, 'status_approved') : r.status === 'denied' ? tr(lang, 'status_denied') : tr(lang, 'status_pending')}
-                    </Badge>
-                  </span>
-                </div>
-                <p className="mt-1.5 font-mono text-[10px] text-slate-500">
-                  requester {r.requester_id.slice(0, 10)}… · {new Date(r.created_at).toLocaleString()}
-                </p>
-                {r.status === 'pending' && (
-                  <div className="mt-4">
-                    <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                      <span className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
-                        <ClockIcon className="h-3.5 w-3.5 text-slate-500" />
-                        <input
-                          type="number"
-                          defaultValue={30}
-                          min={1}
-                          max={1440}
-                          id={`dur-${r.id}`}
-                          className="w-14 bg-transparent text-xs text-slate-800 outline-none"
-                          title="Grant duration in minutes"
-                        />
-                        <span className="text-[10px] text-slate-500">min</span>
-                      </span>
-                      <span className="text-slate-500">{tr(lang, 'request_status')}</span>
-                      <SpeakerButton
-                        text={`${tr(lang, 'request_status')}. ${tr(lang, 'allow')}, ${tr(lang, 'ask_again')}, ${tr(lang, 'block')}?`}
-                        tone="slate"
-                      />
+      {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        {/* Request access (requester side) */}
+        <Panel
+          title="Request access"
+          subtitle="Ask a holder for time-limited access to a credential"
+          icon={<KeyIcon className="h-5 w-5" />}
+          help="The holder will approve or deny. Approved requests become grants that expire automatically."
+        >
+          <div className="space-y-3.5">
+            <Field label="Credential ID" hint="the holder shares the credential's ID with you">
+              <Input value={credId} onChange={(e) => setCredId(e.target.value)} placeholder="credential-uuid" className="font-mono text-xs" />
+            </Field>
+            <Field label="Purpose">
+              <Input value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="Why do you need it?" />
+            </Field>
+            <Field label="Requested claims" hint="comma separated, e.g. full_name, degree">
+              <Input value={claimKeys} onChange={(e) => setClaimKeys(e.target.value)} placeholder="full_name, degree" className="font-mono text-xs" />
+            </Field>
+            <Field label="Expiry">
+              <Select value={expiry} onChange={(e) => setExpiry(e.target.value)}>
+                <option value="15">15 minutes</option>
+                <option value="60">1 hour</option>
+                <option value="480">8 hours</option>
+                <option value="1440">24 hours</option>
+                <option value="4320">3 days</option>
+              </Select>
+            </Field>
+            <BtnPrimary className="w-full" onClick={submitRequest}>
+              Create Access Request
+            </BtnPrimary>
+          </div>
+        </Panel>
+
+        {/* Incoming requests (holder side) */}
+        <Panel
+          title="Incoming requests"
+          subtitle="Access requests awaiting your decision"
+          icon={<ShieldIcon className="h-5 w-5" />}
+        >
+          {incoming.length === 0 && assetIncoming.length === 0 ? (
+            <EmptyState icon={<ShieldIcon className="h-5 w-5" />} title="Nothing pending" hint="Requests from verifiers on your credentials and documents appear here." />
+          ) : (
+            <div className="space-y-3">
+              {incoming.map((r) => (
+                <div key={r.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-xs">
+                      <p className="font-bold text-slate-900">{credMap.get(r.credential_id) ?? r.credential_id.slice(0, 12) + '…'}</p>
+                      <p className="mt-0.5 text-slate-500">
+                        wants: <b className="text-slate-700">{r.purpose}</b> · claims: {r.requested_claims.length ? r.requested_claims.join(', ') : 'all'}
+                      </p>
                     </div>
-
-                    <div className="mt-3 grid grid-cols-3 gap-2">
-                      {(Object.keys(BIG) as (keyof typeof BIG)[]).map((k) => (
-                        <button
-                          key={k}
-                          disabled={false}
-                          onClick={() => bigTap(r, k)}
-                          className={cn(
-                            'flex flex-col items-center justify-center gap-1 rounded-2xl px-2 py-4 text-sm font-bold text-white shadow-lg transition active:scale-95',
-                            BIG[k].active,
-                          )}
-                        >
-                          <span className="text-xl leading-none">{BIG[k].icon}</span>
-                          {tr(lang, k === 'allow' ? 'allow' : k === 'ask_again' ? 'ask_again' : 'block')}
-                        </button>
-                      ))}
+                    <div className="flex gap-2">
+                      <BtnGhost className="!px-3 !py-1.5 text-xs text-rose-600 border border-rose-200" onClick={() => decide(r.id, false)}>
+                        Deny
+                      </BtnGhost>
+                      <BtnPrimary className="!px-3 !py-1.5 text-xs" onClick={() => decide(r.id, true)}>
+                        Allow
+                      </BtnPrimary>
                     </div>
                   </div>
-                )}
+                </div>
+              ))}
+              {assetIncoming.map((r) => (
+                <div key={r.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-xs">
+                      <p className="font-bold text-slate-900">Document {String(r.asset_id).slice(0, 12)}…</p>
+                      <p className="mt-0.5 text-slate-500">{r.purpose}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <BtnGhost className="!px-3 !py-1.5 text-xs text-rose-600 border border-rose-200" onClick={() => assetDecide(r.id, false)}>
+                        Deny
+                      </BtnGhost>
+                      <BtnPrimary className="!px-3 !py-1.5 text-xs" onClick={() => assetDecide(r.id, true)}>
+                        Allow
+                      </BtnPrimary>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+      </div>
+
+      {/* My requests */}
+      <Panel title="My access requests" subtitle="Requests you created as a requester" icon={<KeyIcon className="h-5 w-5" />}>
+        {outgoing.length === 0 ? (
+          <EmptyState icon={<KeyIcon className="h-5 w-5" />} title="No outgoing requests" hint="Create one above using a credential ID shared by a holder." />
+        ) : (
+          <div className="space-y-3">
+            {outgoing.map((r) => (
+              <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
+                <div className="text-xs">
+                  <p className="font-bold text-slate-900">{credMap.get(r.credential_id) ?? r.credential_id.slice(0, 12) + '…'}</p>
+                  <p className="mt-0.5 text-slate-500">{r.purpose} · expires {new Date(r.expires_at).toLocaleString()}</p>
+                </div>
+                <Badge tone={r.status === 'pending' ? 'amber' : r.status === 'approved' ? 'green' : 'red'} dot>
+                  {r.status}
+                </Badge>
               </div>
             ))}
           </div>
         )}
       </Panel>
+
+      {/* Grant registry */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <Panel title="Grants I received" subtitle="Credential access granted to you by holders" icon={<BadgeCheckIcon className="h-5 w-5" />}>
+          {grants.length === 0 ? (
+            <EmptyState icon={<BadgeCheckIcon className="h-5 w-5" />} title="No grants yet" hint="Approved requests become grants you can read." />
+          ) : (
+            <div className="space-y-3">
+              {grants.map((g) => (
+                <div key={g.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
+                  <div className="text-xs">
+                    <p className="font-bold text-slate-900">{credMap.get(g.credential_id) ?? g.credential_id.slice(0, 12) + '…'}</p>
+                    <p className="mt-0.5 text-slate-500">
+                      {g.purpose} · claims: {g.allowed_claims.length ? g.allowed_claims.join(', ') : 'all'} · expires{' '}
+                      {new Date(g.expires_at).toLocaleString()}
+                    </p>
+                  </div>
+                  <Badge tone={g.status === 'active' ? 'green' : 'red'} dot>{g.status}</Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+
+        <Panel title="Access on my credentials" subtitle="Who currently holds access to what you hold" icon={<BadgeCheckIcon className="h-5 w-5" />}>
+          {holderGrants.length === 0 ? (
+            <EmptyState icon={<BadgeCheckIcon className="h-5 w-5" />} title="No active access" hint="Approved grants on your credentials appear here and can be revoked anytime." />
+          ) : (
+            <div className="space-y-3">
+              {holderGrants.map((g) => (
+                <div key={g.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
+                  <div className="text-xs">
+                    <p className="font-bold text-slate-900">{credMap.get(g.credential_id) ?? g.credential_id.slice(0, 12) + '…'}</p>
+                    <p className="mt-0.5 text-slate-500">
+                      {g.purpose} · requester {g.requester_id.slice(0, 10)}… · expires {new Date(g.expires_at).toLocaleString()}
+                    </p>
+                  </div>
+                  <BtnGhost className="!px-3 !py-1.5 text-xs text-rose-600 border border-rose-200" onClick={() => revokeGrant(g.id)}>
+                    Revoke
+                  </BtnGhost>
+                </div>
+              ))}
+            </div>
+          )}
+        </Panel>
+      </div>
     </div>
   )
 }

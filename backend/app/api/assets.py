@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.crypto import sha256_hex
 from app.db.session import get_db
-from app.models import AccessGrant, AccessPolicy, Asset, AssetTransfer, Device, User
+from app.models import AccessGrant, AccessPolicy, Asset, AssetTransfer, TrustedDevice, User
 from app.schemas import (
     AssetCreatePolicyRequest,
     AssetOwnershipOut,
@@ -427,11 +427,12 @@ def download_asset_content(
     )
 
 
-def _current_device_status(db, user: User) -> str:
+def _current_device_status(db, user: User) -> str | None:
     device = (
-        db.query(Device)
-        .filter(Device.user_id == user.id)
-        .order_by(Device.last_seen.desc())
+        db.query(TrustedDevice)
+        .filter(TrustedDevice.user_id == user.id)
+        .order_by(TrustedDevice.last_seen.desc())
         .first()
     )
-    return device.status if device else "unknown"
+    # None = no device signal at all -> trust engine scores NO_DEVICE_TRACKING.
+    return device.status if device else None
